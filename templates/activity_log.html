@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Users Activities Logs{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">System Activity Logs</h1>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Time (UTC)</th>
+                <th scope="col">User</th>
+                <th scope="col">Action</th>
+                <th scope="col">Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ log.user.username }}</td>
+                <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+                <td>
+                    {{ log.details }}
+                    {% if log.incident %}
+                        <a href="{{ url_for('incident_detail', incident_id=log.incident.id) }}">(Incident #{{ log.incident.id }})</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-center">No recorded activity found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

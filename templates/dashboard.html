@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Main Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">SOC Dashboard</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-header">Total Incidents</div>
+            <div class="card-body"><h5 class="card-title display-4">{{ total_incidents }}</h5></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-header">New Incidents</div>
+            <div class="card-body"><h5 class="card-title display-4">{{ new_incidents }}</h5></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white mb-3">
+            <div class="card-header">High Severity</div>
+            <div class="card-body"><h5 class="card-title display-4">{{ severities.get('high', 0) }}</h5></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark mb-3">
+            <div class="card-header">Medium Severity</div>
+            <div class="card-body"><h5 class="card-title display-4">{{ severities.get('medium', 0) }}</h5></div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-6">
+        <div class="card mb-4">
+            <div class="card-header">Alerts Distribution by Type</div>
+            <div class="card-body"><canvas id="eventTypeChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card mb-4">
+            <div class="card-header">Case Distribution by Status</div>
+            <div class="card-body"><canvas id="statusChart"></canvas></div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-xl-12">
+        <div class="card mb-4">
+            <div class="card-header">Top 5 Recurring Alerts</div>
+            <div class="card-body"><canvas id="topAlertsChart"></canvas></div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-xl-12">
+        <div class="card mb-4">
+            <div class="card-header">Incident Trend (Last 7 Days)</div>
+            <div class="card-body"><canvas id="incidentTrendChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<a href="{{ url_for('incidents_list') }}" class="btn btn-dark mt-3">View All Incidents &raquo;</a>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Renk paleti
+    const colors = ['#0d6efd', '#ffc107', '#dc3545', '#198754', '#6c757d', '#0dcaf0'];
+    const barChartColors = [
+        'rgba(255, 99, 132, 0.7)',
+        'rgba(255, 159, 64, 0.7)',
+        'rgba(255, 205, 86, 0.7)',
+        'rgba(75, 192, 192, 0.7)',
+        'rgba(54, 162, 235, 0.7)'
+    ];
+
+    // 1. Olay Tipi Dağılımı (Pasta Grafik)
+    new Chart(document.getElementById('eventTypeChart'), {
+        type: 'pie',
+        data: {
+            labels: {{ pie_event_type_labels|tojson }},
+            datasets: [{ data: {{ pie_event_type_values|tojson }}, backgroundColor: colors }]
+        },
+        options: { responsive: true }
+    });
+
+    // 2. Duruma Göre Dağılım (Donut Grafik)
+    new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ pie_status_labels|tojson }},
+            datasets: [{ data: {{ pie_status_values|tojson }}, backgroundColor: colors }]
+        },
+        options: { responsive: true }
+    });
+    
+    // 3. En Sık Görülen Alarmlar (Çubuk Grafik)
+    new Chart(document.getElementById('topAlertsChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ bar_top_alerts_labels|tojson }},
+            datasets: [{
+                label: '# of Occurrences',
+                data: {{ bar_top_alerts_values|tojson }},
+                backgroundColor: barChartColors,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            scales: { x: { ticks: { precision: 0 } } },
+            plugins: { legend: { display: false } },
+            responsive: true
+        }
+    });
+
+    // 4. Olay Trendi (Çizgi Grafik)
+    new Chart(document.getElementById('incidentTrendChart').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: {{ line_chart_labels|tojson }},
+            datasets: [{
+                label: '# of Incidents',
+                data: {{ line_chart_values|tojson }},
+                fill: true,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: { 
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+            responsive: true 
+        }
+    });
+});
+</script>
+{% endblock %}

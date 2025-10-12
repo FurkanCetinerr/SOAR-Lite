@@ -1,0 +1,20 @@
+{
+    "name": "Brute-Force Attack Detected Playbook",
+    "trigger": { "event_type": "brute_force_detected" },
+    "mitre_mapping": { "technique_id": "T1110", "technique_name": "Brute Force" },
+    "steps": [
+      {
+        "id": 1,
+        "action_type": "add_firewall_rule",
+        "params": { "ip_address": "{{event.source_ip}}", "dry_run": true }
+      },
+      {
+        "id": 2,
+        "action_type": "create_incident",
+        "params": {
+          "severity": "high",
+          "details": "{{event.details}}"
+        }
+      }
+    ]
+  }

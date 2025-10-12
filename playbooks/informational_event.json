@@ -1,0 +1,24 @@
+{
+    "name": "Informational Event Logging Playbook",
+    "trigger": {
+      "event_type": "informational_event_detected"
+    },
+    "steps": [
+      {
+        "id": 1,
+        "action_type": "create_incident",
+        "params": {
+          "severity": "low",
+          "details": "{{event.details}} - IP: {{event.device_ip}}, MAC: {{event.mac_address}}"
+        }
+      },
+      {
+        "id": 2,
+        "action_type": "send_notification",
+        "params": {
+          "channel": "daily_log_digest",
+          "message": "FYI: A new device connected. Details: {{event.details}}"
+        }
+      }
+    ]
+  }

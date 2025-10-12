@@ -1,0 +1,31 @@
+{
+  "name": "Potential Ransomware Activity Playbook",
+  "trigger": { "event_type": "ransomware_activity_detected" },
+  "mitre_mapping": { "technique_id": "T1486", "technique_name": "Data Encrypted for Impact" },
+  "steps": [
+      {
+        "id": 1,
+        "action_type": "isolate_host",
+        "params": {
+          "hostname": "{{event.hostname}}",
+          "reason": "Potential ransomware activity detected by {{event.source}}"
+        }
+      },
+      {
+        "id": 2,
+        "action_type": "create_incident",
+        "params": {
+          "severity": "high",
+          "details": "{{event.details}} on host {{event.hostname}}."
+        }
+      },
+      {
+        "id": 3,
+        "action_type": "send_notification",
+        "params": {
+          "channel": "soc_critical_alerts",
+          "message": "CRITICAL ALERT: Host {{event.hostname}} has been automatically isolated due to ransomware detection. Immediate response required."
+        }
+      }
+    ]
+  }

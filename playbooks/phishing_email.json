@@ -1,0 +1,28 @@
+{
+  "name": "Phishing Email Enrichment Playbook",
+  "trigger": {
+    "event_type": "phishing_email_detected"
+  },
+  "mitre_mapping": {
+    "technique_id": "T1566",
+    "technique_name": "Phishing"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "action_type": "extract_and_enrich_observables",
+      "params": {
+        "text_block": " Sender IP: {{event.source_ip}}. Email Body: {{event.email_body_text}}. Email body contains a malicious link: {{event.malicious_link}}."
+      }
+    },
+    {
+      "id": 2,
+      "action_type": "create_incident",
+      "params": {
+        "severity": "medium",
+        "details": "Phishing attempt from {{event.sender}} to {{event.recipient}}. Source IP: {{event.source_ip}}",
+        "extracted_observables": "{{extracted_observables}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Incident #{{ incident.id }} Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h1>Incident #{{ incident.id }}</h1>
+    <a href="{{ url_for('incidents_list') }}" class="btn btn-secondary">&laquo; Back to List</a>
+</div>
+<hr>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>Event Type:</strong> {{ incident.event_type }}
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item"><strong>Timestamp (UTC):</strong> {{ incident.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</li>
+                <li class="list-group-item">
+                    <strong>Severity:</strong>
+                    {% if incident.severity == 'high' %}<span class="badge bg-danger fs-6">High</span>
+                    {% elif incident.severity == 'medium' %}<span class="badge bg-warning text-dark fs-6">Medium</span>
+                    {% else %}<span class="badge bg-info fs-6">{{ incident.severity|capitalize }}</span>
+                    {% endif %}
+                </li>
+                <li class="list-group-item"><strong>Status:</strong> <span class="badge bg-primary fs-6">{{ incident.status }}</span></li>
+                <li class="list-group-item">
+                    <strong>Assignee:</strong>
+                    {% if incident.assignee %}
+                        <span class="badge bg-dark fs-6">{{ incident.assignee.username }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary fs-6">Unassigned</span>
+                    {% endif %}
+                </li>
+                <li class="list-group-item"><strong>Details:</strong><pre class="mb-0">{{ incident.details }}</pre></li>
+            </ul>
+        </div>
+
+        {% if incident.vt_malicious_count is not none %}
+        <div class="card mt-4">
+            <div class="card-header fw-bold text-white bg-info">Threat Intelligence Enrichment (VirusTotal)</div>
+            <div class="card-body">
+                <p class="card-text">The IP address associated with this incident was flagged as <strong>malicious by {{ incident.vt_malicious_count }} security vendors</strong>.</p>
+                <a href="{{ incident.vt_report_link }}" target="_blank" class="btn btn-outline-primary">View Full Report on VirusTotal</a>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if incident.mitre_technique_id %}
+        <div class="card mt-4">
+            <div class="card-header fw-bold text-white bg-dark">MITRE ATT&CK® Context</div>
+            <div class="card-body">
+                <p class="card-text">This activity corresponds to the <strong>{{ incident.mitre_technique_name }}</strong> technique.</p>
+                <a href="https://attack.mitre.org/techniques/{{ incident.mitre_technique_id }}/" target="_blank" class="btn btn-outline-secondary">View Technique: {{ incident.mitre_technique_id }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if incident.observables %}
+        <div class="card mt-4">
+            <div class="card-header fw-bold">Extracted & Enriched Observables</div>
+            <div class="card-body">
+                <table class="table table-sm table-hover">
+                    <thead><tr><th>Type</th><th>Value</th><th>VT Score</th><th>Report</th></tr></thead>
+                    <tbody>
+                        {% for obs in incident.observables %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ obs.type|upper }}</span></td>
+                            <td><code>{% if obs.type == 'hash' and obs.value|length > 30 %}{{ obs.value[:12] }}...{{ obs.value[-12:] }}{% else %}{{ obs.value }}{% endif %}</code></td>
+                            <td>
+                                {% if obs.vt_score > 0 %}<span class="badge bg-danger">{{ obs.vt_score }} vendors</span>
+                                {% else %}<span class="badge bg-success">0 vendors</span>
+                                {% endif %}
+                            </td>
+                            <td><a href="{{ obs.vt_link }}" target="_blank">View</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header fw-bold">
+                {% if incident.assignee %}
+                    Re-assign Incident
+                {% else %}
+                    Assign Incident
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('assign_incident', incident_id=incident.id) }}" method="POST">
+                    <div class="input-group">
+                        <select name="assignee_id" class="form-select">
+                            
+                            {% if incident.assignee is none %}
+                                <option value="" disabled selected>Select an action...</option>
+                                <option value="claim_for_myself">Assign to Myself</option>
+                                <option disabled>──────────</option>
+                                {% for user in all_users %}
+                                    <option value="{{ user.id }}">{{ user.username }}</option>
+                                {% endfor %}
+                            
+                            {% else %}
+                                <option value="{{ incident.assignee.id }}" disabled selected>{{ incident.assignee.username }} (Current)</option>
+                                <option value="unassign">Remove Assignment</option>
+                                <option disabled>──────────</option>
+                                {% for user in all_users %}
+                                    {% if user.id != incident.assignee.id %}
+                                        <option value="{{ user.id }}">{{ user.username }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+        
+                        </select>
+                        <button class="btn btn-primary" type="submit">
+                            {% if incident.assignee %}Update{% else %}Assign{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-warning mb-4">
+            <div class="card-header fw-bold border-warning">Actions</div>
+            <div class="card-body">
+                
+                {% if incident.status == 'In Progress' and incident.assignee == current_user %}
+                    <p class="card-text text-muted small">
+                        If you feel this incident is beyond your control or needs to be reviewed by a higher level, you can escalate.
+                    </p>
+                    <form action="{{ url_for('escalate_incident', incident_id=incident.id) }}" method="POST">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <strong>Escalate Incident</strong>
+                        </button>
+                    </form>
+                {% else %}
+                    <p class="text-muted">There is no appropriate action at this time.</p>
+                {% endif %}
+                
+            </div>
+        </div>
+
+        <h4>Analyst Notes (Timeline)</h4>
+        
+        <div class="card mb-3">
+            <div class="card-body">
+                <form action="{{ url_for('add_note', incident_id=incident.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="note_content" class="form-label">Add a new note:</label>
+                        <textarea class="form-control" id="note_content" name="note_content" rows="3" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Note</button>
+                </form>
+            </div>
+        </div>
+
+        {% for note in incident.notes|sort(attribute='created_at', reverse=True) %}
+        <div class="card mb-2">
+            <div class="card-header bg-light py-1 px-3 d-flex justify-content-between align-items-center">
+                <strong>{{ note.user.username }}</strong>
+                <small class="text-muted">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            </div>
+            <div class="card-body py-2 px-3">
+                <p class="card-text mb-0">{{ note.content | safe }}</p>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted">No notes added yet.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{
+  "name": "Malicious IP Alert Playbook v2 (Conditional)",
+  "trigger": {
+    "event_type": "malicious_ip_detected"
+  },
+  "mitre_mapping": {
+    "technique_id": "T1071",
+    "technique_name": "Application Layer Protocol"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "action_type": "enrich_ip_with_virustotal",
+      "params": {
+        "ip_address": "{{event.ip}}"
+      }
+    },
+    {
+      "id": 2,
+      "action_type": "add_firewall_rule",
+      "condition": "{{virustotal_report.count}} > 3",
+      "params": {
+        "ip_address": "{{event.ip}}"
+      }
+    },
+    {
+      "id": 3,
+      "action_type": "create_incident",
+      "params": {
+        "severity": "high",
+        "details": "Malicious IP {{event.ip}} detected. VT Score: {{virustotal_report.count}} vendors.",
+        "virustotal_report": "{{virustotal_report}}"
+      }
+    }
+  ]
+}
