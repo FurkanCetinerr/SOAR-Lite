@@ -19,6 +19,8 @@ class Incident(db.Model):
     # backref='incident', bir notun hangi incident'a ait olduğunu note.incident ile verir.
     notes = db.relationship('Note', backref='incident', lazy=True, cascade="all, delete-orphan")
     
+    closed_at = db.Column(db.DateTime, nullable=True) # Olay kapatıldığında doldurulacak
+    
     # VirusTotal
     vt_malicious_count = db.Column(db.Integer, nullable=True)
     vt_report_link = db.Column(db.String(255), nullable=True)
@@ -87,7 +89,8 @@ class Observable(db.Model):
     
     # Her observable'ın hangi Incident'a ait olduğunu belirten Foreign Key
     incident_id = db.Column(db.Integer, db.ForeignKey('incident.id'), nullable=False)
-
+    #Enrichment ile bağlantı
+    enrichments = db.relationship('Enrichment', backref='observable', lazy=True, cascade="all, delete-orphan")
 # --- AKSİYON KAYIT MODELİ ---
 class ActionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -133,5 +136,25 @@ class UserActivityLog(db.Model):
 
     def __repr__(self):
         return f'<UserActivityLog {self.id} by User {self.user.username}>'
+    
+# --- Enrichment Modeli ---
+class Enrichment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Bu zenginleştirme hangi Observable'a ait? (IP, domain, hash)
+    observable_id = db.Column(db.Integer, db.ForeignKey('observable.id'), nullable=False)
+    
+    source = db.Column(db.String(100), nullable=False) # Örn: "VirusTotal", "AbuseIPDB", "Shodan"
+    status = db.Column(db.String(50), default='Success') # Örn: "Success", "Pending", "Failed"
+    
+    # API'den dönen tüm JSON yanıtını burada saklayacağız
+    raw_data = db.Column(db.Text, nullable=True)
+    
+    # Arayüzde hızlıca göstermek için özet bilgi
+    summary = db.Column(db.String(255), nullable=True) # Örn: "Skor: 100/100", "Açık Portlar: 80, 443"
+
+    def __repr__(self):
+        return f'<Enrichment {self.id} for Obs {self.observable_id} from {self.source}>'
     
     

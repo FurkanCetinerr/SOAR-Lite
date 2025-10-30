@@ -2,72 +2,88 @@
 
 import requests
 import json
+import sys
 
 # Sunucumuzun adresi
 SOAR_API_URL = "http://127.0.0.1:5000/api/v1/event"
 
-# Senaryo 1: Malicious IP Tespiti Olayı [cite: 37]
+# Senaryo 1: Malicious IP Tespiti Olayı
 malicious_ip_event = {
-    "event_type": "malicious_ip_detected", # [cite: 39]
-    "source": "suricata", # [cite: 40]
-    "ip": "92.118.39.95", # IP adresini değiştirebilirsin (Bilinen bir Cobalt Strike sunucusu)
-    "confidence": 0.95, # [cite: 42]
-    "first_seen": "2025-09-14T12:00:00Z", # [cite: 43]
-    "details": "Suricata sig 201234 matched" # [cite: 44]
+    "event_type": "malicious_ip_detected",
+    "source": "suricata",
+    # Eski IP yerine, AbuseIPDB'de sıkça raporlanan bir IP (Örnek: Kötüye kullanılan bir VPN/Proxy IP'si)
+    "ip": "193.161.193.99", 
+    "confidence": 0.95,
+    "details": "Suricata sig ET MALWARE Known Malvertising IP" 
 }
 
-# Senaryo 2: Phishing E-posta Tespiti Olayı [cite: 54]
+# Senaryo 2: Phishing E-posta Tespiti Olayı
 phishing_mail_event = {
-    "event_type": "phishing_email_detected", # [cite: 56]
-    "source": "mail_gateway", # [cite: 57]
-    "mail_id": "phish-001", # [cite: 58]
-    "recipient": "kurban.kullanici@sirket.com", # [cite: 59]
-    "sender": "destek@bilgigncillemesi.com", # [cite: 60]
-    "subject": "Acil: Hesabinizi dogrulayin", # [cite: 61]
-    "source_ip": "45.146.164.110", # Test için bilinen zararlı bir IP
+    "event_type": "phishing_email_detected",
+    "source": "mail_gateway",
+    "mail_id": "phish-002",
+    "recipient": "kurban.kullanici@sirket.com",
+    "sender": "noreply@baddomain-example.com", # Daha jenerik bir sahte domain
+    "subject": "Fatura Guncellemesi Gerekli",
+    # Eski IP yerine, bilinen kötü amaçlı IP (Örn: PhishTank'ten alınmış)
+    "source_ip": "146.70.153.116", 
     
     "email_body_text": (
-        "Sayin kullanici, lutfen bilgilerinizi guncellemek icin http://cijoint-my-account-part-fr.com adresine tiklayin. "
-        "Guvenlik taramasi icin ekteki programi calistirin. "
-        "Dosya SHA256: 24d004a104d4d54034dbcffc2a4b19a11f39008a575aa614ea04703480b1022c" # WannaCry hash'i
+        # Eski domain yerine, WHOIS/DNS sorgusunda sonuç verecek aktif ama test amaçlı domain
+        "Lutfen faturanizi odemek icin https://google.com adresine tiklayin. " 
+        # Hash aynı kalabilir, WannaCry iyi bir test örneği
+        "Ekli dosya SHA256: 24d004a104d4d54034dbcffc2a4b19a11f39008a575aa614ea04703480b1022c" 
     )
 }
 
-# Senaryo 3: Bilgilendirme Olayı (Low Severity) ---
+# Senaryo 3: Bilgilendirme Olayı (Low Severity)
 informational_event = {
     "event_type": "informational_event_detected",
     "source": "network_monitor",
-    "device_ip": "192.168.1.201",
-    "mac_address": "B8:27:EB:01:02:03",
-    "details": "New device connected to the Guest WiFi network."
+    # Özel IP yerine, Google'ın DNS sunucusu (WHOIS/Shodan sorgulanabilir)
+    "device_ip": "8.8.8.8", 
+    "mac_address": "AA:BB:CC:01:02:03", # MAC adresi jenerik kalabilir
+    "details": "New device registered on network."
 }
 
-# --- Senaryo 4: Şüpheli Giriş (Medium Severity) ---
+# Senaryo 4: Şüpheli Giriş (Medium Severity)
 suspicious_login_event = {
     "event_type": "suspicious_login_detected",
     "source": "Azure_AD_Identity_Protection",
-    "username": "furkan.kaya",
-    "source_ip": "203.0.113.55",
-    "country": "Netherlands",
-    "details": "Successful login from a new and infrequent location."
+    "username": "test.user", # Daha jenerik
+    # Eski IP yerine, farklı bir ülkeden bilinen bir IP (Örn: Tor exit node)
+    "source_ip": "185.220.101.43", 
+    "country": "Germany", # IP'ye uygun ülke
+    "details": "Successful login from a Tor exit node."
 }
 
-# --- Senaryo 5: Olası Fidye Yazılımı (High Severity) ---
+# Senaryo 5: Olası Fidye Yazılımı (High Severity)
 ransomware_activity_event = {
     "event_type": "ransomware_activity_detected",
     "source": "CrowdStrike_EDR",
-    "hostname": "WEBSRV01",
-    "file_count": 742,
-    "details": "Rapid file encryption detected in C:\\shares\\. Affected extension: .locked"
+    "hostname": "FINANCE-PC01", # Daha jenerik
+    "file_count": 850,
+    "details": "High volume of file modifications detected matching known ransomware patterns (.crypt extension)."
 }
 
-# --- Senaryo 6: Başarısız Login (Low Severity) ---
+# Senaryo 6: Başarısız Login (Low Severity)
 failed_login_event = {
     "event_type": "failed_login",
     "source": "Firewall_Logs",
-    "username": "admin",
-    "source_ip": "127.0.0.1", # Test için kendi IP'miz
-    "details": "Failed password attempt for user 'admin'."
+    "username": "administrator",
+    # Localhost yerine, dışarıdan gelen bir IP (Shodan/AbuseIPDB sorgulanabilir)
+    "source_ip": "1.1.1.1", # Cloudflare DNS
+    "details": "Multiple failed SSH login attempts for user 'administrator'."
+}
+
+# Olayları kolayca seçebilmek için bir sözlük (dictionary) oluşturalım
+EVENT_MAP = {
+    "malicious_ip": malicious_ip_event,
+    "phishing": phishing_mail_event,
+    "info": informational_event,
+    "login": suspicious_login_event,
+    "ransomware": ransomware_activity_event,
+    "failed_login": failed_login_event
 }
 
 def send_event(event_payload):
@@ -76,34 +92,47 @@ def send_event(event_payload):
         headers = {'Content-Type': 'application/json'}
         response = requests.post(SOAR_API_URL, data=json.dumps(event_payload), headers=headers)
         
-        # Sunucudan gelen yanıtı yazdır
         print(f"Status Code: {response.status_code}")
+        response.raise_for_status() # 500 veya 400 gibi hatalarda programı durdur
         print(f"Response JSON: {response.json()}")
 
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+        print(f"Response Content: {response.text}")
     except requests.exceptions.ConnectionError as e:
         print(f"Error: Connection to the SOAR engine failed. Is the server running?")
-        print(e)
+    except requests.exceptions.JSONDecodeError as e:
+        print(f"Error: Failed to decode JSON response from server. Server may have crashed.")
+        print(f"Response Content: {response.text}")
 
+# --- YENİ: AKILLI BAŞLATMA KISMI ---
 if __name__ == "__main__":
-    #import time
-    # 1 dakika içinde 6 kez başarısız login olayı gönder
-    #for i in range(6):
-        #print(f"--- Sending Failed Login Event #{i+1} ---")
-        #send_event(failed_login_event)
-        #time.sleep(1) # Her olay arasında 1 saniye bekle
-        
-    # print("--- Sending Malicious IP Event ---")
-    # send_event(malicious_ip_event)
-
-    # Aşağıdaki bölümleri test etmek için üsttekini yorum satırı yapıp bunu aktif edebilirsin
-    # print("\n--- Sending Phishing Mail Event ---")
-    # send_event(phishing_mail_event)
+    # Komut satırından bir argüman verilmiş mi diye kontrol et
+    # sys.argv[0] her zaman dosya adıdır (send_event.py)
+    # sys.argv[1] ise bizim verdiğimiz ilk argümandır (örn: "phishing")
     
-     print("\n--- Sending Informational Event (Low) ---")
-     send_event(informational_event)
-    
-    # print("\n--- Sending Suspicious Login Event (Medium) ---")
-    # send_event(suspicious_login_event)
+    if len(sys.argv) < 2:
+        # Argüman verilmemişse, kullanıcıya nasıl kullanacağını söyle
+        print("Hata: Lütfen göndermek istediğiniz olayın adını belirtin.")
+        print("Kullanım: python send_event.py <olay_adi>")
+        print("\nKullanılabilir olay adları:")
+        for key in EVENT_MAP.keys():
+            print(f"  - {key}")
+        sys.exit(1) # Hata koduyla çık
 
-    # print("\n--- Sending Ransomware Activity Event (High) ---")
-    # send_event(ransomware_activity_event)
+    # Verilen argümanı al (örn: "phishing")
+    event_key = sys.argv[1]
+    
+    # Argümanın EVENT_MAP içinde olup olmadığını kontrol et
+    if event_key not in EVENT_MAP:
+        print(f"Hata: '{event_key}' adında bir olay bulunamadı.")
+        print("\nKullanılabilir olay adları:")
+        for key in EVENT_MAP.keys():
+            print(f"  - {key}")
+        sys.exit(1)
+
+    # Argümana karşılık gelen olayı sözlükten al
+    event_to_send = EVENT_MAP[event_key]
+    
+    print(f"--- Sending '{event_key}' Event ---")
+    send_event(event_to_send)

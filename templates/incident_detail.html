@@ -61,25 +61,78 @@
         <div class="card mt-4">
             <div class="card-header fw-bold">Extracted & Enriched Observables</div>
             <div class="card-body">
-                <table class="table table-sm table-hover">
-                    <thead><tr><th>Type</th><th>Value</th><th>VT Score</th><th>Report</th></tr></thead>
+                <table class="table table-sm table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Value</th>
+                            <th>Quick Summary</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for obs in incident.observables %}
                         <tr>
                             <td><span class="badge bg-secondary">{{ obs.type|upper }}</span></td>
                             <td><code>{% if obs.type == 'hash' and obs.value|length > 30 %}{{ obs.value[:12] }}...{{ obs.value[-12:] }}{% else %}{{ obs.value }}{% endif %}</code></td>
                             <td>
-                                {% if obs.vt_score > 0 %}<span class="badge bg-danger">{{ obs.vt_score }} vendors</span>
-                                {% else %}<span class="badge bg-success">0 vendors</span>
-                                {% endif %}
+                                {% for enrichment in obs.enrichments %}
+                                    {% if enrichment.source == 'VirusTotal' %}
+                                        <span class="badge bg-danger" title="VirusTotal Score">{{ enrichment.summary }}</span>
+                                    {% elif enrichment.source == 'AbuseIPDB' %}
+                                        <span class="badge bg-warning text-dark" title="AbuseIPDB Score">{{ enrichment.summary }}</span>
+                                    {% endif %}
+                                {% endfor %}
                             </td>
-                            <td><a href="{{ obs.vt_link }}" target="_blank">View</a></td>
+                            <td>
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#observableModal-{{ obs.id }}">
+                                    View Details
+                                </button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+        
+        {% for obs in incident.observables %}
+        <div class="modal fade" id="observableModal-{{ obs.id }}" tabindex="-1" aria-labelledby="observableModalLabel-{{ obs.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="observableModalLabel-{{ obs.id }}">
+                            Enrichment Details for: <code>{{ obs.value }}</code>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        
+                        <ul class="nav nav-tabs" id="enrichmentTabs-{{ obs.id }}" role="tablist">
+                            {% for enrichment in obs.enrichments %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if loop.first %}active{% endif %}" id="tab-{{ enrichment.source | replace(' ','-') }}-{{ obs.id }}" data-bs-toggle="tab" data-bs-target="#content-{{ enrichment.source | replace(' ','-') }}-{{ obs.id }}" type="button" role="tab">{{ enrichment.source }}</button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        
+                        <div class="tab-content" id="enrichmentTabContent-{{ obs.id }}">
+                            {% for enrichment in obs.enrichments %}
+                            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="content-{{ enrichment.source | replace(' ','-') }}-{{ obs.id }}" role="tabpanel">
+                                <h6 class="mt-3">Raw JSON Data from {{ enrichment.source }}</h6>
+                                <pre style="background-color: #f5f5f5; border: 1px solid #ccc; padding: 10px; border-radius: 4px; word-wrap: break-word; white-space: pre-wrap;">{{ enrichment.raw_data | tojson(indent=2) }}</pre>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
         {% endif %}
     </div>
 

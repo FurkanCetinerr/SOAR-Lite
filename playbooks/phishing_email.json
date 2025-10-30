@@ -1,5 +1,5 @@
 {
-  "name": "Phishing Email Enrichment Playbook",
+  "name": "Phishing Email Playbook v2 (Refactored)",
   "trigger": {
     "event_type": "phishing_email_detected"
   },
@@ -10,9 +10,9 @@
   "steps": [
     {
       "id": 1,
-      "action_type": "extract_and_enrich_observables",
+      "action_type": "extract_observables",
       "params": {
-        "text_block": " Sender IP: {{event.source_ip}}. Email Body: {{event.email_body_text}}. Email body contains a malicious link: {{event.malicious_link}}."
+        "text_block": "Sender IP: {{event.source_ip}}. Email Body: {{event.email_body_text}}."
       }
     },
     {

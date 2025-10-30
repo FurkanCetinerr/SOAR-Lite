@@ -65,6 +65,60 @@
     </div>
 </div>
 
+<hr class="my-4"> <h2 class="h3 mb-3">Analyst & Team Performance</h2>
+
+<div class="row">
+    <div class="col-xl-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Open Incidents by Assignee</div>
+            <div class="card-body">
+                {% if assignee_labels %}
+                    <canvas id="assigneeChart"></canvas>
+                {% else %}
+                    <p class="text-muted text-center my-3">No assigned open incidents found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6 mb-4">
+        <div class="row">
+            <div class="col-12 mb-4">
+                 <div class="card bg-info text-white">
+                    <div class="card-header">Average Time to Resolve (MTTR)</div>
+                    <div class="card-body">
+                        <h5 class="card-title display-5">{{ mttr_formatted }}</h5>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">Recently Closed Incidents (Last 5)</div>
+                    <div class="card-body p-0"> {# Padding'i kaldırıp listeyi tam oturtalım #}
+                        <ul class="list-group list-group-flush">
+                            {% for incident in recently_closed %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a> - 
+                                    <small>{{ incident.event_type }}</small>
+                                </span>
+                                <span class="badge bg-secondary rounded-pill">
+                                    {{ (incident.closed_at.replace(tzinfo=None) - incident.created_at.replace(tzinfo=None)) | string | replace(' days, ', 'd ') | replace(' day, ', 'd ') | replace(':','h ', 1) | replace(':','m') | replace('s','') | replace('.','') | truncate(15) }}
+                                     by {{ incident.assignee.username if incident.assignee else 'N/A' }}
+                                </span>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item text-muted text-center">No closed incidents yet.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <a href="{{ url_for('incidents_list') }}" class="btn btn-dark mt-3">View All Incidents &raquo;</a>
 {% endblock %}
 
@@ -140,6 +194,52 @@ document.addEventListener('DOMContentLoaded', function () {
             responsive: true 
         }
     });
+
+    // 5. Analiste Göre Açık Olaylar (Yatay Bar Grafik)
+    try { // <-- Hata yakalamayı başlat
+        const assigneeCtx = document.getElementById('assigneeChart');
+        // Hem canvas'ın varlığını hem de verilerin (labels VE values) dolu olup olmadığını kontrol et
+        const assigneeLabels = {{ assignee_labels|tojson|safe }};
+        const assigneeValues = {{ assignee_values|tojson|safe }};
+
+        if (assigneeCtx && assigneeLabels && assigneeLabels.length > 0 && assigneeValues && assigneeValues.length > 0) {
+            new Chart(assigneeCtx, {
+                type: 'bar',
+                data: {
+                    labels: assigneeLabels, // Değişkenleri kullan
+                    datasets: [{
+                        label: '# of Open Incidents',
+                        data: assigneeValues, // Değişkenleri kullan
+                        backgroundColor: barChartColors, 
+                        borderColor: barChartColors.map(color => color.replace('0.7', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', 
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 } 
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false 
+                }
+            });
+        } else if (assigneeCtx) {
+             // Eğer canvas varsa ama veri yoksa, "Veri Yok" mesajı gösterilebilir (opsiyonel)
+             // assigneeCtx.parentNode.innerHTML = '<p class="text-muted text-center my-3">No assigned open incidents data to display.</p>';
+             console.log("Assignee chart canvas found, but no data provided."); // Konsola log yazalım
+        }
+    } catch (error) { // <-- Hata yakalama sonu
+        console.error("Error rendering Assignee Chart:", error); 
+        // Hata olursa konsola yazdır ama diğer grafikleri engelleme
+    }
+
 });
 </script>
 {% endblock %}

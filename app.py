@@ -1,13 +1,15 @@
 # app.py
 import time
 import re
+
 from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort
 from engine import PlaybookEngine
 from database import db, Incident, Note, User, Notification, UserActivityLog
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from correlation_engine import CorrelationEngine
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps 
+from sqlalchemy import func, cast, Interval
 
 # Geçici olayları ve zaman damgalarını saklamak için basit bir önbellek
 EVENT_CACHE = []
@@ -127,6 +129,63 @@ def dashboard():
     severities_data = db.session.query(Incident.severity, db.func.count(Incident.severity)).group_by(Incident.severity).all()
     severities = {s: c for s, c in severities_data}
 
+    # --- YENİ SORGULAR VE HESAPLAMALAR ---
+
+    # 1. Analiste Göre Açık Olay Sayısı
+    open_incidents_by_assignee = db.session.query(
+            User.username, 
+            func.count(Incident.id)
+        ).join(Incident.assignee).filter(
+            Incident.status != 'Closed'
+        ).group_by(User.username).all()
+    # Chart.js için formatla
+    assignee_labels = [item[0] for item in open_incidents_by_assignee]
+    assignee_values = [item[1] for item in open_incidents_by_assignee]
+
+    # 2. Ortalama Çözüm Süresi (MTTR)
+    # SQLAlchemy'de zaman farkı hesaplaması veritabanına göre değişir.
+    # SQLite için Julian Day kullanmak daha güvenilir olabilir.
+    # PostgreSQL/MySQL için direkt çıkarma veya AGE fonksiyonu kullanılabilir.
+    # Şimdilik Python tarafında hesaplayalım (küçük veri setleri için OK):
+    closed_incidents = Incident.query.filter(Incident.status == 'Closed', Incident.closed_at.isnot(None)).all()
+    total_resolution_time = timedelta(0)
+    resolved_count = 0
+    if closed_incidents:
+        for incident in closed_incidents:
+            # Emin olmak için timezone-aware yapalım
+            created = incident.created_at.replace(tzinfo=timezone.utc)
+            closed = incident.closed_at.replace(tzinfo=timezone.utc)
+            total_resolution_time += (closed - created)
+            resolved_count += 1
+    
+    average_resolution_time_seconds = 0
+    if resolved_count > 0:
+        average_resolution_time_seconds = total_resolution_time.total_seconds() / resolved_count
+    
+    # Saniyeyi okunabilir formata çevirelim (örn: 1 gün 2 saat 15 dk)
+    def format_timedelta(seconds):
+        if seconds == 0: return "N/A"
+        delta = timedelta(seconds=seconds)
+        days = delta.days
+        hours, remainder = divmod(delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        parts = []
+        if days > 0: parts.append(f"{days} gün")
+        if hours > 0: parts.append(f"{hours} saat")
+        if minutes > 0: parts.append(f"{minutes} dk")
+        return " ".join(parts) if parts else "< 1 dk"
+
+    mttr_formatted = format_timedelta(average_resolution_time_seconds)
+
+    # 3. Son Kapatılan Olaylar
+    recently_closed = Incident.query.filter(
+            Incident.status == 'Closed', 
+            Incident.closed_at.isnot(None)
+        ).order_by(Incident.closed_at.desc()).limit(5).all()
+    
+    # ------------------------------------
+
+
     # Çizgi Grafik (Son 7 Gün)
     chart_data = {}
     today = datetime.utcnow().date()
@@ -201,7 +260,16 @@ def dashboard():
                            bar_top_alerts_labels=bar_top_alerts_labels,
                            bar_top_alerts_values=bar_top_alerts_values,
                            pie_mitre_labels=pie_mitre_labels,
-                           pie_mitre_values=pie_mitre_values)
+                           pie_mitre_values=pie_mitre_values,
+                           
+                           # --- YENİ EKLENEN DEĞİŞKENLER ---
+                           assignee_labels=assignee_labels,
+                           assignee_values=assignee_values,
+                           mttr_formatted=mttr_formatted,
+                           recently_closed=recently_closed
+                           # ------------------------------------
+                           
+                           )
 
 @app.route('/incidents')
 @login_required
@@ -260,11 +328,40 @@ def escalate_incident(incident_id):
 @login_required
 def update_status(incident_id):
     incident = Incident.query.get_or_404(incident_id)
+    old_status = incident.status
     new_status = request.form.get('status')
-    if new_status:
+    
+    if new_status and new_status != old_status: # Sadece durum değişmişse işlem yap
         incident.status = new_status
+        
+        # --- YENİ MANTIK ---
+        # Eğer yeni durum 'Closed' ise, closed_at zamanını ayarla
+        if new_status == 'Closed':
+            incident.closed_at = datetime.utcnow() # VEYA datetime.now(datetime.UTC) Python 3.12+
+        # Eğer olay 'Closed' durumundan çıkarılıyorsa, closed_at zamanını temizle
+        elif old_status == 'Closed' and new_status != 'Closed':
+            incident.closed_at = None
+        # --------------------
+
+        # Aktiviteyi logla
+        log_activity(user=current_user, 
+                     action="Status Change", 
+                     details=f"Changed status from '{old_status}' to '{new_status}'.",
+                     incident=incident)
+            
         db.session.commit()
-    return redirect(url_for('incidents_list'))
+        flash(f"Incident #{incident.id} status updated to '{new_status}'.", 'success')
+        
+    # Yönlendirmeyi, isteğin geldiği yere göre yapalım (liste veya detay sayfası)
+    # Bu kısmı eklemek kullanıcı deneyimini iyileştirir
+    # referrer = request.referrer
+    # if referrer and 'incident/' in referrer:
+    #     return redirect(url_for('incident_detail', incident_id=incident.id))
+    # else:
+    #     return redirect(url_for('incidents_list'))
+    
+    # Şimdilik basit tutalım:
+    return redirect(request.referrer or url_for('incidents_list')) # Geldiği sayfaya geri dön
 
 #Not fonksiyonu route 
 @app.route('/incident/<int:incident_id>/add_note', methods=['POST'])

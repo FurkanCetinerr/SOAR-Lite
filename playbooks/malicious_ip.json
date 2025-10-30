@@ -1,5 +1,5 @@
 {
-  "name": "Malicious IP Alert Playbook v2 (Conditional)",
+  "name": "Malicious IP Alert Playbook v3 (Refactored)",
   "trigger": {
     "event_type": "malicious_ip_detected"
   },
@@ -10,26 +10,20 @@
   "steps": [
     {
       "id": 1,
-      "action_type": "enrich_ip_with_virustotal",
+      "action_type": "create_incident",
       "params": {
-        "ip_address": "{{event.ip}}"
+        "severity": "high",
+        "details": "Malicious IP {{event.ip}} detected by {{event.source}}.",
+        "extracted_observables": [
+          {"type": "ip", "value": "{{event.ip}}"}
+        ]
       }
     },
     {
       "id": 2,
       "action_type": "add_firewall_rule",
-      "condition": "{{virustotal_report.count}} > 3",
       "params": {
         "ip_address": "{{event.ip}}"
-      }
-    },
-    {
-      "id": 3,
-      "action_type": "create_incident",
-      "params": {
-        "severity": "high",
-        "details": "Malicious IP {{event.ip}} detected. VT Score: {{virustotal_report.count}} vendors.",
-        "virustotal_report": "{{virustotal_report}}"
       }
     }
   ]
