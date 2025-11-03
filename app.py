@@ -4,7 +4,7 @@ import re
 
 from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort
 from engine import PlaybookEngine
-from database import db, Incident, Note, User, Notification, UserActivityLog
+from database import db, Incident, Note, User, Notification, UserActivityLog, Observable
 from datetime import datetime, timedelta, timezone
 from correlation_engine import CorrelationEngine
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -120,147 +120,183 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+def format_timedelta(seconds):
+    """Toplam saniyeyi 'X gün Y saat Z dk' formatına çevirir."""
+    if seconds == 0: return "N/A"
+    delta = timedelta(seconds=seconds)
+    days = delta.days
+    hours, remainder = divmod(delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts = []
+    if days > 0: parts.append(f"{days} day")
+    if hours > 0: parts.append(f"{hours} hour")
+    if minutes > 0: parts.append(f"{minutes} min")
+    return " ".join(parts) if parts else "< 1 min"
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # KPI Kartları
-    total_incidents = Incident.query.count()
-    new_incidents = Incident.query.filter_by(status='New').count()
-    severities_data = db.session.query(Incident.severity, db.func.count(Incident.severity)).group_by(Incident.severity).all()
+    # 1. ZAMAN FİLTRESİNİ AL VE HESAPLA (Aynı)
+    current_range = request.args.get('range', '30d') 
+    now_utc = datetime.now(timezone.utc)
+    start_time = None
+    
+    if current_range == '24h':
+        start_time = now_utc - timedelta(hours=24)
+    elif current_range == '7d':
+        start_time = now_utc - timedelta(days=7)
+    elif current_range == 'all':
+        start_time = None 
+    else:
+        current_range = '30d' 
+        start_time = now_utc - timedelta(days=30)
+    
+    # 2. FİLTRELENMİŞ TEMEL SORGU (BASE QUERY) (Aynı)
+    base_query = Incident.query
+    if start_time:
+        base_query = base_query.filter(Incident.created_at >= start_time)
+
+    # --- KPI Kartları (Filtreli) (Aynı) ---
+    total_incidents = base_query.count()
+    new_incidents = base_query.filter_by(status='New').count()
+    
+    # --- DÜZELTİLMİŞ SORGULAR (select_from yerine with_entities kullanarak) ---
+    
+    # Severities (SAWarning Düzeltildi)
+    severities_data = base_query.with_entities(
+        Incident.severity, func.count(Incident.severity)
+    ).filter(Incident.severity.isnot(None)).group_by(Incident.severity).all()
     severities = {s: c for s, c in severities_data}
 
-    # --- YENİ SORGULAR VE HESAPLAMALAR ---
+    # --- Çizgi Grafik (Son 7 Gün - Değişiklik yok) ---
+    today = datetime.utcnow().date()
+    # ... (Geri kalanı aynı, burayı kısaltıyorum) ...
+    daily_counts = db.session.query(
+        func.date(Incident.created_at), func.count(Incident.id)
+    ).filter(Incident.created_at >= (today - timedelta(days=6))).group_by(
+        func.date(Incident.created_at)
+    ).all()
+    chart_data = {}
+    for i in range(7):
+        day = today - timedelta(days=i)
+        chart_data[day.strftime('%Y-%m-%d')] = 0
+    for day_str, count in daily_counts:
+        if str(day_str) in chart_data:
+             chart_data[str(day_str)] = count
+    sorted_chart_data = sorted(chart_data.items())
+    line_chart_labels = [item[0] for item in sorted_chart_data]
+    line_chart_values = [item[1] for item in sorted_chart_data]
 
-    # 1. Analiste Göre Açık Olay Sayısı
-    open_incidents_by_assignee = db.session.query(
+    # --- Diğer Grafikler (SAWarning Düzeltildi) ---
+    event_type_data = base_query.with_entities(
+        Incident.event_type, func.count(Incident.event_type)
+    ).group_by(Incident.event_type).all()
+    pie_event_type_labels = [item[0] for item in event_type_data]
+    pie_event_type_values = [item[1] for item in event_type_data]
+
+    status_data = base_query.with_entities(
+        Incident.status, func.count(Incident.status)
+    ).group_by(Incident.status).all()
+    pie_status_labels = [item[0] for item in status_data]
+    pie_status_values = [item[1] for item in status_data]
+    
+    top_alerts_data = base_query.with_entities(
+        Incident.details, func.count(Incident.details)
+    ).group_by(Incident.details).order_by(
+        func.count(Incident.details).desc()
+    ).limit(5).all()
+    bar_top_alerts_labels = [item[0] for item in top_alerts_data]
+    bar_top_alerts_values = [item[1] for item in top_alerts_data]
+    
+    mitre_data = base_query.with_entities(
+        Incident.mitre_technique_name, func.count(Incident.mitre_technique_name)
+    ).filter(Incident.mitre_technique_name.isnot(None)).group_by(
+        Incident.mitre_technique_name
+    ).order_by(func.count(Incident.mitre_technique_name).desc()).all()
+    pie_mitre_labels = [item[0] for item in mitre_data]
+    pie_mitre_values = [item[1] for item in mitre_data]
+
+    # --- Analist Performans (InvalidRequestError DÜZELTİLDİ) ---
+    
+    # 1. Önce açık olaylar için temel sorguyu oluştur (filtreli)
+    open_incidents_query = Incident.query.filter(Incident.status != 'Closed')
+    if start_time:
+        open_incidents_query = open_incidents_query.filter(Incident.created_at >= start_time)
+        
+    # 2. BU SORGUDAN BAŞLAYARAK JOIN VE GROUP BY YAP
+    open_incidents_by_assignee = open_incidents_query.join(
+            User, Incident.assignee_id == User.id # .join(Incident.assignee) yerine açıkça yazalım
+        ).with_entities(
             User.username, 
             func.count(Incident.id)
-        ).join(Incident.assignee).filter(
-            Incident.status != 'Closed'
         ).group_by(User.username).all()
-    # Chart.js için formatla
+    
     assignee_labels = [item[0] for item in open_incidents_by_assignee]
     assignee_values = [item[1] for item in open_incidents_by_assignee]
 
-    # 2. Ortalama Çözüm Süresi (MTTR)
-    # SQLAlchemy'de zaman farkı hesaplaması veritabanına göre değişir.
-    # SQLite için Julian Day kullanmak daha güvenilir olabilir.
-    # PostgreSQL/MySQL için direkt çıkarma veya AGE fonksiyonu kullanılabilir.
-    # Şimdilik Python tarafında hesaplayalım (küçük veri setleri için OK):
-    closed_incidents = Incident.query.filter(Incident.status == 'Closed', Incident.closed_at.isnot(None)).all()
+    # MTTR (Zaman Filtreli - Değişiklik yok)
+    closed_incidents = base_query.filter(Incident.status == 'Closed', Incident.closed_at.isnot(None)).all()
     total_resolution_time = timedelta(0)
     resolved_count = 0
     if closed_incidents:
         for incident in closed_incidents:
-            # Emin olmak için timezone-aware yapalım
             created = incident.created_at.replace(tzinfo=timezone.utc)
             closed = incident.closed_at.replace(tzinfo=timezone.utc)
             total_resolution_time += (closed - created)
             resolved_count += 1
-    
     average_resolution_time_seconds = 0
     if resolved_count > 0:
         average_resolution_time_seconds = total_resolution_time.total_seconds() / resolved_count
-    
-    # Saniyeyi okunabilir formata çevirelim (örn: 1 gün 2 saat 15 dk)
-    def format_timedelta(seconds):
-        if seconds == 0: return "N/A"
-        delta = timedelta(seconds=seconds)
-        days = delta.days
-        hours, remainder = divmod(delta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        parts = []
-        if days > 0: parts.append(f"{days} gün")
-        if hours > 0: parts.append(f"{hours} saat")
-        if minutes > 0: parts.append(f"{minutes} dk")
-        return " ".join(parts) if parts else "< 1 dk"
-
     mttr_formatted = format_timedelta(average_resolution_time_seconds)
 
-    # 3. Son Kapatılan Olaylar
+    # Son Kapatılanlar (Filtresiz - Değişiklik yok)
     recently_closed = Incident.query.filter(
             Incident.status == 'Closed', 
             Incident.closed_at.isnot(None)
         ).order_by(Incident.closed_at.desc()).limit(5).all()
     
-    # ------------------------------------
+    # --- YENİ SORGULAR: FAZ 2 - TEHDİT MANZARASI ---
 
-    # --- 4. ATANMAMIŞ OLAYLAR KUYRUĞU ---
-    unassigned_incidents_query = Incident.query.filter(
-        Incident.assignee_id.is_(None),
-        or_(Incident.status == 'New', Incident.status == 'Escalated')
-    ).order_by(Incident.created_at.asc()).all()
-    
-    # Önem seviyesine göre Python'da sıralayalım (High en üstte)
-    severity_order = {'high': 1, 'medium': 2, 'low': 3, 'info': 4}
-    unassigned_incidents_sorted = sorted(
-        unassigned_incidents_query, 
-        key=lambda x: severity_order.get(x.severity.lower(), 99)
-    )
-    # ------------------------------------
-
-    # Çizgi Grafik (Son 7 Gün)
-    chart_data = {}
-    today = datetime.utcnow().date()
-    for i in range(7):
-        day = today - timedelta(days=i)
-        chart_data[day.strftime('%Y-%m-%d')] = 0
-    seven_days_ago = today - timedelta(days=6)
-    daily_counts = db.session.query(
-        db.func.date(Incident.created_at), db.func.count(Incident.id)
-    ).filter(Incident.created_at >= seven_days_ago).group_by(
-        db.func.date(Incident.created_at)
-    ).all()
-    for day_str, count in daily_counts:
-        chart_data[str(day_str)] = count
-    sorted_chart_data = sorted(chart_data.items())
-    line_chart_labels = [item[0] for item in sorted_chart_data]
-    line_chart_values = [item[1] for item in sorted_chart_data]
-
-    # Pasta Grafik (Olay Tipine Göre)
-    event_type_data = db.session.query(Incident.event_type, db.func.count(Incident.event_type)).group_by(Incident.event_type).all()
-    pie_event_type_labels = [item[0] for item in event_type_data]
-    pie_event_type_values = [item[1] for item in event_type_data]
-
-    # Pasta Grafik (Duruma Göre)
-    status_data = db.session.query(Incident.status, db.func.count(Incident.status)).group_by(Incident.status).all()
-    pie_status_labels = [item[0] for item in status_data]
-    pie_status_values = [item[1] for item in status_data]
-    
-        # --- YENİ: ÇUBUK GRAFİK İÇİN VERİ HAZIRLAMA (EN SIK GÖRÜLEN 5 ALARM) ---
-    top_alerts_data = db.session.query(
-        Incident.details, 
-        db.func.count(Incident.details)
-    ).group_by(Incident.details).order_by(
-        db.func.count(Incident.details).desc()
-    ).limit(5).all()
-    
-    bar_top_alerts_labels = [item[0] for item in top_alerts_data]
-    bar_top_alerts_values = [item[1] for item in top_alerts_data]
-    
-    # Çubuk Grafik (En Sık Görülen 5 Alarm)
-    top_alerts_data = db.session.query(
-        Incident.details, db.func.count(Incident.details)
-    ).group_by(Incident.details).order_by(
-        db.func.count(Incident.details).desc()
-    ).limit(5).all()
-    bar_top_alerts_labels = [item[0] for item in top_alerts_data]
-    bar_top_alerts_values = [item[1] for item in top_alerts_data]
-    
-        # --- YENİ: MITRE GRAFİĞİ İÇİN VERİ HAZIRLAMA ---
-    mitre_data = db.session.query(
-        Incident.mitre_technique_name, 
-        db.func.count(Incident.mitre_technique_name)
+    # 1. En Çok Görülen MITRE Teknikleri (Bar Grafik)
+    # base_query'miz zaten zaman filtresini içeriyor.
+    mitre_data = base_query.with_entities(
+        Incident.mitre_technique_name, func.count(Incident.mitre_technique_name)
     ).filter(Incident.mitre_technique_name.isnot(None)).group_by(
         Incident.mitre_technique_name
-    ).order_by(
-        db.func.count(Incident.mitre_technique_name).desc()
-    ).all()
-    
-    pie_mitre_labels = [item[0] for item in mitre_data]
-    pie_mitre_values = [item[1] for item in mitre_data]
+    ).order_by(func.count(Incident.mitre_technique_name).desc()).limit(5).all()
 
+    # Not: Bu sorgu, bir önceki adımdaki pie_mitre_labels ile aynı olabilir,
+    # ama bariz olması için yeni değişken adları kullanalım:
+    mitre_bar_labels = [item[0] for item in mitre_data]
+    mitre_bar_values = [item[1] for item in mitre_data]
+
+    # 2. En Çok Görülen Zararlı IP/Domain'ler (vt_score > 5 olanlar)
+    # Bu yeni bir sorgu, Incident ve Observable tablolarını join etmeliyiz.
+    top_obs_query = db.session.query(
+            Observable.value, 
+            func.count(Observable.value)
+        ).join(Incident, Observable.incident_id == Incident.id).filter(
+         Observable.type.in_(['ip', 'domain']),
+            Observable.vt_score > 5  # Sadece skoru 5'ten yüksek olanları "zararlı" sayalım
+        )
+
+    # Zaman filtresini bu sorguya da uygula
+    if start_time:
+        top_obs_query = top_obs_query.filter(Incident.created_at >= start_time)
+
+    top_obs_data = top_obs_query.group_by(Observable.value).order_by(
+        func.count(Observable.value).desc()
+    ).limit(5).all()
+
+    top_obs_labels = [item[0] for item in top_obs_data]
+    top_obs_values = [item[1] for item in top_obs_data]
+
+# ------------------------------------------------
+    
+    
+    # --- RENDER TEMPLATE (Değişiklik yok) ---
     return render_template('dashboard.html',
+                           current_range=current_range,
                            total_incidents=total_incidents,
                            new_incidents=new_incidents,
                            severities=severities,
@@ -274,15 +310,15 @@ def dashboard():
                            bar_top_alerts_values=bar_top_alerts_values,
                            pie_mitre_labels=pie_mitre_labels,
                            pie_mitre_values=pie_mitre_values,
-                           
-                           # --- YENİ EKLENEN DEĞİŞKENLER ---
                            assignee_labels=assignee_labels,
                            assignee_values=assignee_values,
                            mttr_formatted=mttr_formatted,
                            recently_closed=recently_closed,
-                           # ------------------------------------
-                           unassigned_incidents=unassigned_incidents_sorted
-                           
+                           # --- YENİ EKLENEN TEHDİT MANZARASI VERİLERİ ---
+                           mitre_bar_labels=mitre_bar_labels,
+                           mitre_bar_values=mitre_bar_values,
+                           top_obs_labels=top_obs_labels,
+                           top_obs_values=top_obs_values
                            )
 
 @app.route('/incidents')

@@ -7,6 +7,32 @@
     <h1 class="h2">SOC Dashboard</h1>
 </div>
 
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{{ url_for('dashboard', range='24h') }}" 
+           class="btn btn-sm btn-outline-secondary {% if current_range == '24h' %}active{% endif %}">
+           Son 24 Saat
+        </a>
+        <a href="{{ url_for('dashboard', range='7d') }}" 
+           class="btn btn-sm btn-outline-secondary {% if current_range == '7d' %}active{% endif %}">
+           Son 7 Gün
+        </a>
+        <a href="{{ url_for('dashboard', range='30d') }}" 
+           class="btn btn-sm btn-outline-secondary {% if current_range == '30d' %}active{% endif %}">
+           Son 30 Gün
+        </a>
+        <a href="{{ url_for('dashboard', range='all') }}" 
+           class="btn btn-sm btn-outline-secondary {% if current_range == 'all' %}active{% endif %}">
+           Tüm Zamanlar
+        </a>
+    </div>
+</div>
+
+<div class="form-check form-switch mt-2 mb-3">
+    <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshSwitch">
+    <label class="form-check-label" for="autoRefreshSwitch">Otomatik Yenilemeyi Aç (Her 60 saniyede bir)</label>
+</div>
+
 <div class="row">
     <div class="col-md-3">
         <div class="card text-white bg-primary mb-3">
@@ -177,6 +203,38 @@
     </div>
 </div>
 
+<hr class="my-4">
+
+<h2 class="h3 mb-3">Threat Landscape (Filtered)</h2>
+
+<div class="row">
+    <div class="col-xl-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Top 5 MITRE ATT&CK® Techniques</div>
+            <div class="card-body">
+                {% if mitre_bar_labels %}
+                    <canvas id="mitreBarChart"></canvas>
+                {% else %}
+                    <p class="text-muted text-center my-3">No MITRE data found for this period.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Top 5 Malicious Observables (VT Score > 5)</div>
+            <div class="card-body">
+                 {% if top_obs_labels %}
+                    <canvas id="topObservablesChart"></canvas>
+                {% else %}
+                    <p class="text-muted text-center my-3">No malicious observables found for this period.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 </div>
 
 <a href="{{ url_for('incidents_list') }}" class="btn btn-dark mt-3">View All Incidents &raquo;</a>
@@ -195,6 +253,52 @@ document.addEventListener('DOMContentLoaded', function () {
         'rgba(75, 192, 192, 0.7)',
         'rgba(54, 162, 235, 0.7)'
     ];
+
+    // --- YENİ EKLENEN OTOMATİK YENİLEME KODU ---
+    const autoRefreshSwitch = document.getElementById('autoRefreshSwitch');
+    let refreshInterval; // Yenileme zamanlayıcısını tutmak için değişken
+
+    // 1. Sayfa yüklendiğinde, localStorage'daki eski ayarı kontrol et
+    if (localStorage.getItem('autoRefreshEnabled') === 'true') {
+        autoRefreshSwitch.checked = true; // Switch'i "açık" yap
+        startRefresh(); // ve yenilemeyi başlat
+    }
+
+    // 2. Switch'e tıklandığında ne olacağını belirle
+    autoRefreshSwitch.addEventListener('click', function() {
+        if (this.checked) {
+            // Eğer "açık" konuma getirildiyse
+            localStorage.setItem('autoRefreshEnabled', 'true'); // Ayarı kaydet
+            startRefresh(); // Yenilemeyi başlat
+        } else {
+            // Eğer "kapalı" konuma getirildiyse
+            localStorage.setItem('autoRefreshEnabled', 'false'); // Ayarı kaydet
+            stopRefresh(); // Yenilemeyi durdur
+        }
+    });
+
+    // 3. Yenilemeyi başlatan fonksiyon
+    function startRefresh() {
+        // Zaten çalışan bir yenileme varsa diye önce temizle
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+        // 60 saniyede bir sayfayı yenile (60000 milisaniye)
+        refreshInterval = setInterval(function() {
+            console.log("Auto-refreshing dashboard...");
+            window.location.reload(); // Sayfayı yenile
+        }, 60000); 
+    }
+
+    // 4. Yenilemeyi durduran fonksiyon
+    function stopRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null; // Zamanlayıcıyı sıfırla
+            console.log("Auto-refresh stopped.");
+        }
+    }
+    // --- OTOMATİK YENİLEME KODU SONU ---
 
     // 1. Olay Tipi Dağılımı (Pasta Grafik)
     new Chart(document.getElementById('eventTypeChart'), {
@@ -298,6 +402,68 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (error) { // <-- Hata yakalama sonu
         console.error("Error rendering Assignee Chart:", error); 
         // Hata olursa konsola yazdır ama diğer grafikleri engelleme
+    }
+
+    // 6. En Çok Görülen MITRE Teknikleri (Yatay Bar Grafik)
+    try {
+        const mitreCtx = document.getElementById('mitreBarChart');
+        const mitreLabels = {{ mitre_bar_labels|tojson|safe }};
+        const mitreValues = {{ mitre_bar_values|tojson|safe }};
+
+        if (mitreCtx && mitreLabels && mitreLabels.length > 0) {
+            new Chart(mitreCtx, {
+                type: 'bar',
+                data: {
+                    labels: mitreLabels,
+                    datasets: [{
+                        label: '# of Occurrences',
+                        data: mitreValues,
+                        backgroundColor: barChartColors.slice(0, mitreLabels.length), // Renkleri kullanalım
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Yatay bar
+                    scales: { x: { ticks: { precision: 0 } } },
+                    plugins: { legend: { display: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+    } catch (error) {
+        console.error("Error rendering MITRE Bar Chart:", error);
+    }
+    
+    // 7. En Çok Görülen Zararlı Observables (Yatay Bar Grafik)
+    try {
+        const obsCtx = document.getElementById('topObservablesChart');
+        const obsLabels = {{ top_obs_labels|tojson|safe }};
+        const obsValues = {{ top_obs_values|tojson|safe }};
+
+        if (obsCtx && obsLabels && obsLabels.length > 0) {
+            new Chart(obsCtx, {
+                type: 'bar',
+                data: {
+                    labels: obsLabels,
+                    datasets: [{
+                        label: '# of Sightings',
+                        data: obsValues,
+                        backgroundColor: barChartColors.slice(0, obsLabels.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Yatay bar
+                    scales: { x: { ticks: { precision: 0 } } },
+                    plugins: { legend: { display: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+    } catch (error) {
+        console.error("Error rendering Top Observables Chart:", error);
     }
 
 });
