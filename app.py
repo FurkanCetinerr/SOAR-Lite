@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from correlation_engine import CorrelationEngine
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps 
-from sqlalchemy import func, cast, Interval
+from sqlalchemy import func, cast, Interval, or_
 
 # Geçici olayları ve zaman damgalarını saklamak için basit bir önbellek
 EVENT_CACHE = []
@@ -185,6 +185,19 @@ def dashboard():
     
     # ------------------------------------
 
+    # --- 4. ATANMAMIŞ OLAYLAR KUYRUĞU ---
+    unassigned_incidents_query = Incident.query.filter(
+        Incident.assignee_id.is_(None),
+        or_(Incident.status == 'New', Incident.status == 'Escalated')
+    ).order_by(Incident.created_at.asc()).all()
+    
+    # Önem seviyesine göre Python'da sıralayalım (High en üstte)
+    severity_order = {'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+    unassigned_incidents_sorted = sorted(
+        unassigned_incidents_query, 
+        key=lambda x: severity_order.get(x.severity.lower(), 99)
+    )
+    # ------------------------------------
 
     # Çizgi Grafik (Son 7 Gün)
     chart_data = {}
@@ -266,8 +279,9 @@ def dashboard():
                            assignee_labels=assignee_labels,
                            assignee_values=assignee_values,
                            mttr_formatted=mttr_formatted,
-                           recently_closed=recently_closed
+                           recently_closed=recently_closed,
                            # ------------------------------------
+                           unassigned_incidents=unassigned_incidents_sorted
                            
                            )
 

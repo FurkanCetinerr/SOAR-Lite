@@ -117,6 +117,66 @@
             </div>
         </div>
     </div>
+
+    <hr class="my-4">
+<h2 class="h3 mb-3">Operational Queues</h2>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header fw-bold">Unassigned Incidents Queue (New & Escalated)</div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover align-items-center">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Incident ID</th>
+                                <th>Event Type</th>
+                                <th>Status</th>
+                                <th>Created (UTC)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for incident in unassigned_incidents %}
+                            <tr>
+                                <td>
+                                    {% if incident.severity == 'high' %}<span class="badge bg-danger">High</span>
+                                    {% elif incident.severity == 'medium' %}<span class="badge bg-warning text-dark">Medium</span>
+                                    {% elif incident.severity == 'low' %}<span class="badge bg-info">Low</span>
+                                    {% else %}<span class="badge bg-secondary">{{ incident.severity|capitalize }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}"><strong>#{{ incident.id }}</strong></a></td>
+                                <td>{{ incident.event_type }}</td>
+                                <td>
+                                    {% if incident.status == 'New' %}<span class="badge bg-primary">New</span>
+                                    {% elif incident.status == 'Escalated' %}<span class="badge bg-warning text-dark">Escalated</span>
+                                    {% else %}<span class="badge bg-secondary">{{ incident.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ incident.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <form action="{{ url_for('assign_incident', incident_id=incident.id) }}" method="POST" style="display:inline-block;">
+                                        <input type="hidden" name="assignee_id" value="claim_for_myself">
+                                        <button type-="submit" class="btn btn-success btn-sm py-0">Claim</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">There are no unassigned events. Good Job!</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 </div>
 
 <a href="{{ url_for('incidents_list') }}" class="btn btn-dark mt-3">View All Incidents &raquo;</a>
