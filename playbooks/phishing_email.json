@@ -1,5 +1,5 @@
 {
-  "name": "Phishing Email Playbook v2 (Refactored)",
+  "name": "Phishing Email Playbook v3 (Auto-Firewall)",
   "trigger": {
     "event_type": "phishing_email_detected"
   },
@@ -17,11 +17,20 @@
     },
     {
       "id": 2,
+      "action_type": "generate_firewall_rule",
+      "params": { 
+          "event_type": "phishing_email_detected",
+          "source_ip": "{{event.source_ip}}" 
+      }
+    },
+    {
+      "id": 3,
       "action_type": "create_incident",
       "params": {
         "severity": "medium",
         "details": "Phishing attempt from {{event.sender}} to {{event.recipient}}. Source IP: {{event.source_ip}}",
-        "extracted_observables": "{{extracted_observables}}"
+        "extracted_observables": "{{extracted_observables}}",
+        "suggested_firewall_rule": "{{suggested_firewall_rule}}"
       }
     }
   ]

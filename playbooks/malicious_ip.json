@@ -1,5 +1,5 @@
 {
-  "name": "Malicious IP Alert Playbook v3 (Refactored)",
+  "name": "Malicious IP Alert Playbook v3 (Auto-Firewall)",
   "trigger": {
     "event_type": "malicious_ip_detected"
   },
@@ -10,20 +10,22 @@
   "steps": [
     {
       "id": 1,
-      "action_type": "create_incident",
+      "action_type": "generate_firewall_rule",
       "params": {
-        "severity": "high",
-        "details": "Malicious IP {{event.ip}} detected by {{event.source}}.",
-        "extracted_observables": [
-          {"type": "ip", "value": "{{event.ip}}"}
-        ]
+        "event_type": "malicious_ip_detected",
+        "ip": "{{event.ip}}"
       }
     },
     {
       "id": 2,
-      "action_type": "add_firewall_rule",
+      "action_type": "create_incident",
       "params": {
-        "ip_address": "{{event.ip}}"
+        "severity": "high",
+        "details": "Malicious IP {{event.ip}} detected. Automated firewall rule generated.",
+        "extracted_observables": [
+          {"type": "ip", "value": "{{event.ip}}"}
+        ],
+        "suggested_firewall_rule": "{{suggested_firewall_rule}}"
       }
     }
   ]

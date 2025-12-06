@@ -1,27 +1,36 @@
 {
-  "name": "Suspicious Login Alert Playbook",
+  "name": "Suspicious Login Alert Playbook v2",
   "trigger": { "event_type": "suspicious_login_detected" },
   "mitre_mapping": { "technique_id": "T1078", "technique_name": "Valid Accounts" },
   "steps": [
-    {
-      "id": 1,
-      "action_type": "create_incident",
-      "params": {
-        "severity": "medium",
-        "details": "Suspicious login for user {{event.username}} from {{event.country}} (IP: {{event.source_ip}}).",
-        "extracted_observables": [
-          {"type": "ip", "value": "{{event.source_ip}}"},
-          {"type": "username", "value": "{{event.username}}"}
-        ]
+      {
+        "id": 1,
+        "action_type": "generate_firewall_rule",
+        "params": {
+          "event_type": "malicious_ip_detected", 
+          "ip": "{{event.source_ip}}"
+        }
+      },
+      {
+        "id": 2,
+        "action_type": "create_incident",
+        "params": {
+          "severity": "medium",
+          "details": "Suspicious login for user {{event.username}} from {{event.country}} (IP: {{event.source_ip}}).",
+          "extracted_observables": [
+            {"type": "ip", "value": "{{event.source_ip}}"},
+            {"type": "username", "value": "{{event.username}}"}
+          ],
+          "suggested_firewall_rule": "{{suggested_firewall_rule}}"
+        }
+      },
+      {
+        "id": 3,
+        "action_type": "send_notification",
+        "params": {
+          "channel": "soc_alerts",
+          "message": "Medium Alert: Suspicious login for user {{event.username}}. Please investigate."
+        }
       }
-    },
-    {
-      "id": 2,
-      "action_type": "send_notification",
-      "params": {
-        "channel": "soc_alerts",
-        "message": "Medium Alert: Suspicious login for user {{event.username}}. Please investigate."
-      }
-    }
-  ]
-}
+    ]
+  }

@@ -290,6 +290,27 @@
             </div>
         </div>
 
+        {% if incident.suggested_firewall_rule %}
+        <div class="card border-danger mb-4">
+            <div class="card-header fw-bold border-danger text-danger">
+                <i class="bi bi-shield-lock-fill"></i> Suggested Remediation (Firewall)
+            </div>
+            <div class="card-body">
+                <p class="card-text">The system has generated a specific firewall rule to mitigate this threat.</p>
+        
+                <div class="bg-dark text-white p-3 rounded mb-3 font-monospace">
+                    <span class="text-success">$</span> {{ incident.suggested_firewall_rule }}
+                </div>
+        
+                <form action="{{ url_for('apply_firewall_rule', incident_id=incident.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-fire"></i> Apply Rule to Firewall
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
         <h4>Analyst Notes (Timeline)</h4>
         
         <div class="card mb-3">
@@ -319,4 +340,45 @@
         {% endfor %}
     </div>
 </div>
+
+
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content text-center">
+        <div class="modal-header bg-success text-white justify-content-center">
+          <h5 class="modal-title" id="successModalLabel">
+              <i class="bi bi-check-circle-fill display-6"></i><br>
+              Action Successful
+          </h5>
+        </div>
+        <div class="modal-body py-4">
+          <h4 class="text-success">Firewall Rule Applied!</h4>
+          <p class="mb-0">The rule has been successfully pushed to the Perimeter Firewall via API.</p>
+          <hr>
+          <code class="text-dark bg-light p-2 rounded d-block mt-2">{{ incident.suggested_firewall_rule }}</code>
+        </div>
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-success px-4" data-bs-dismiss="modal">Close & Continue Investigation</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function(){
+        // URL parametrelerini kontrol et
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Eğer '?firewall_applied=true' varsa
+        if(urlParams.get('firewall_applied') === 'true'){
+            // Bootstrap Modal'ını bul ve göster
+            var myModal = new bootstrap.Modal(document.getElementById('successModal'));
+            myModal.show();
+            
+            // URL'i temizle (sayfa yenilenince tekrar çıkmasın diye)
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
+</script>
+
 {% endblock %}

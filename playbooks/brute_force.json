@@ -1,23 +1,27 @@
 {
-  "name": "Brute-Force Attack Detected Playbook",
+  "name": "Brute-Force Attack Playbook v3 (Auto-Firewall)",
   "trigger": { "event_type": "brute_force_detected" },
   "mitre_mapping": { "technique_id": "T1110", "technique_name": "Brute Force" },
   "steps": [
     {
       "id": 1,
-      "action_type": "add_firewall_rule",
-      "params": { "ip_address": "{{event.source_ip}}", "dry_run": true }
+      "action_type": "generate_firewall_rule",
+      "params": { 
+          "event_type": "brute_force_detected",
+          "source_ip": "{{event.source_ip}}" 
+      }
     },
     {
       "id": 2,
       "action_type": "create_incident",
       "params": {
         "severity": "high",
-        "details": "{{event.details}}",
+        "details": "{{event.details}} Firewall rule suggested.",
         "extracted_observables": [
           {"type": "ip", "value": "{{event.source_ip}}"},
           {"type": "username", "value": "{{event.username}}"}
-        ]
+        ],
+        "suggested_firewall_rule": "{{suggested_firewall_rule}}"
       }
     }
   ]

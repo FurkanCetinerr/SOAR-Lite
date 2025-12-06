@@ -36,7 +36,9 @@ def create_incident(params):
             severity=params.get('severity', 'low'),
             details=params.get('details', 'No details provided.'),
             mitre_technique_id=mitre_mapping.get('technique_id'),
-            mitre_technique_name=mitre_mapping.get('technique_name')
+            mitre_technique_name=mitre_mapping.get('technique_name'),
+            # Playbook'tan gelen 'suggested_firewall_rule' verisini kaydet
+            suggested_firewall_rule=params.get('suggested_firewall_rule')
         )
         
         observables_to_create = []
@@ -182,14 +184,15 @@ def _get_virustotal_hash_report(file_hash):
         return None
        
 # ---  PARÇALAMA AKSİYONU ---
+# actions.py içindeki extract_observables fonksiyonu
+
 def extract_observables(params):
-    """Metin bloğundan IP, domain ve hash'leri söker."""
     text_to_scan = params.get('text_block', '')
-    if not text_to_scan: return None
+    if not text_to_scan: return {"extracted_observables": []}
 
     ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
     domain_pattern = r'\b(?:[a-zA-Z0-9-]{2,}\.)+[a-zA-Z]{2,}\b'
-    hash_pattern = r'\b[A-Fa-f0-9]{64}\b' # Sadece SHA256 için
+    hash_pattern = r'\b[A-Fa-f0-9]{64}\b' 
 
     found_ips = re.findall(ip_pattern, text_to_scan)
     found_domains = re.findall(domain_pattern, text_to_scan)
@@ -198,17 +201,21 @@ def extract_observables(params):
     # Özel IP'leri (localhost, broadcast vb.) filtreleyelim
     private_ips = r'^(127\.)|(192\.168\.)|(10\.)|(172\.(1[6-9]|2[0-9]|3[0-1])\.)'
     filtered_ips = [ip for ip in found_ips if not re.match(private_ips, ip)]
+    observables_list = []
+    
+    # Tekrarları önlemek için set kullanalım
+    for ip in set(found_ips):
+        observables_list.append({"type": "ip", "value": ip})
+    for domain in set(found_domains):
+        observables_list.append({"type": "domain", "value": domain})
+    for h in set(found_hashes):
+        observables_list.append({"type": "hash", "value": h})
 
-    all_observables = []
-    for ip in list(set(filtered_ips)):
-        all_observables.append({"type": "ip", "value": ip})
-    for domain in list(set(found_domains)):
-        all_observables.append({"type": "domain", "value": domain})
-    for file_hash in list(set(found_hashes)):
-        all_observables.append({"type": "hash", "value": file_hash})
+    print(f"   -> 🔎 Extracted observables: {observables_list}")
+    
+    # KRİTİK NOKTA: Veriyi sözlük olarak döndür ki engine context'e yazabilsin
+    return {"extracted_observables": observables_list}
 
-    print(f"   -> 🔎 Extracted observables: {all_observables}")
-    return {"extracted_observables": all_observables}
 
 # ---  ZENGİNLEŞTİRME AKSİYONU ---
 def enrich_observable_with_virustotal(observable):
@@ -528,6 +535,60 @@ def submit_to_hybrid_analysis(observable):
     except Exception as e:
         # Kod içindeki diğer olası hatalar
         print(f"   -> 🛑 CRITICAL ERROR in Hybrid Analysis submission: {e}")
+        
+        
+def generate_firewall_rule(params):
+    """
+    Olayın türüne ve içeriğine göre otomatik bir firewall kuralı önerir.
+    Dönen kural, Incident tablosundaki 'suggested_firewall_rule' alanına kaydedilir.
+    """
+    event_type = params.get('event_type')
+    rule = None
+    
+    # Senaryo 1: Malicious IP (Kaynak IP'yi engelle)
+    if event_type == 'malicious_ip_detected':
+        # Olayın içindeki IP'yi bulmaya çalışalım (params'dan veya observable'lardan)
+        ip = params.get('ip') or params.get('source_ip')
+        if not ip:
+            # Eğer direkt parametre olarak gelmediyse, extracted_observables içinden IP'yi bul
+            observables = params.get('extracted_observables', [])
+            for obs in observables:
+                if obs.get('type') == 'ip':
+                    ip = obs.get('value')
+                    break
+        
+        if ip:
+            # Linux iptables formatında kural üret
+            rule = f"iptables -A INPUT -s {ip} -j DROP # Block Malicious IP"
+
+    # Senaryo 2: Brute Force (SSH/RDP gibi servisleri koru)
+    elif event_type == 'brute_force_detected':
+        ip = params.get('source_ip')
+        # Varsayılan olarak SSH (22) portunu koruyalım
+        if ip:
+            rule = f"iptables -A INPUT -p tcp --dport 22 -s {ip} -j DROP # Block SSH Brute Force"
+
+    # Senaryo 3: Phishing (Zararlı IP'ye çıkışı engelle)
+    elif event_type == 'phishing_email_detected':
+        # Phishing'de genellikle içeriden dışarıya (C2 sunucusuna) bağlantı engellenir
+        source_ip = params.get('source_ip')
+        if source_ip:
+             rule = f"iptables -A OUTPUT -d {source_ip} -j DROP # Block C2 Connection"
+
+    # Senaryo 4: Ransomware (Cihazı izole et - Firewall seviyesinde tüm trafiği kes)
+    elif event_type == 'ransomware_activity_detected':
+        hostname = params.get('hostname')
+        # Bu biraz daha sembolik, çünkü hostname ile iptables kuralı yazılmaz, IP lazım.
+        # Ama simülasyon için mantığı göstermek yeterli.
+        rule = f"# ISOLATION RULE\niptables -A INPUT -s {hostname} -j DROP\niptables -A OUTPUT -d {hostname} -j DROP"
+
+    if rule:
+        print(f"   -> 🛡️  Generated Firewall Rule: {rule}")
+        return {"suggested_firewall_rule": rule}
+    
+    print("   -> ℹ️  No suitable firewall rule generated for this event type.")
+    return None
+
         
         
     

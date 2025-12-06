@@ -1,34 +1,43 @@
 {
-  "name": "Potential Ransomware Activity Playbook",
+  "name": "Potential Ransomware Activity Playbook v2 (Auto-Firewall)",
   "trigger": { "event_type": "ransomware_activity_detected" },
   "mitre_mapping": { "technique_id": "T1486", "technique_name": "Data Encrypted for Impact" },
   "steps": [
-    {
-      "id": 1,
-      "action_type": "isolate_host",
-      "params": {
-        "hostname": "{{event.hostname}}",
-        "reason": "Potential ransomware activity detected by {{event.source}}"
+      {
+        "id": 1,
+        "action_type": "isolate_host",
+        "params": {
+          "hostname": "{{event.hostname}}",
+          "reason": "Potential ransomware activity detected by {{event.source}}"
+        }
+      },
+      {
+        "id": 2,
+        "action_type": "generate_firewall_rule",
+        "params": {
+          "event_type": "ransomware_activity_detected",
+          "hostname": "{{event.hostname}}"
+        }
+      },
+      {
+        "id": 3,
+        "action_type": "create_incident",
+        "params": {
+          "severity": "high",
+          "details": "{{event.details}} on host {{event.hostname}}.",
+          "extracted_observables": [
+            {"type": "hostname", "value": "{{event.hostname}}"}
+          ],
+          "suggested_firewall_rule": "{{suggested_firewall_rule}}"
+        }
+      },
+      {
+        "id": 4,
+        "action_type": "send_notification",
+        "params": {
+          "channel": "soc_critical_alerts",
+          "message": "CRITICAL ALERT: Host {{event.hostname}} isolated. Firewall rules updated."
+        }
       }
-    },
-    {
-      "id": 2,
-      "action_type": "create_incident",
-      "params": {
-        "severity": "high",
-        "details": "{{event.details}} on host {{event.hostname}}.",
-        "extracted_observables": [
-          {"type": "hostname", "value": "{{event.hostname}}"}
-        ]
-      }
-    },
-    {
-      "id": 3,
-      "action_type": "send_notification",
-      "params": {
-        "channel": "soc_critical_alerts",
-        "message": "CRITICAL ALERT: Host {{event.hostname}} has been automatically isolated due to ransomware detection. Immediate response required."
-      }
-    }
-  ]
-}
+    ]
+  }

@@ -410,6 +410,29 @@ def update_status(incident_id):
     # Şimdilik basit tutalım:
     return redirect(request.referrer or url_for('incidents_list')) # Geldiği sayfaya geri dön
 
+@app.route('/incident/<int:incident_id>/apply_firewall', methods=['POST'])
+@login_required
+def apply_firewall_rule(incident_id):
+    incident = Incident.query.get_or_404(incident_id)
+    
+    if incident.suggested_firewall_rule:
+        # Burada gerçek bir Firewall API'sine istek atılırdı.
+        # Biz simülasyon yapıyoruz.
+        
+        # Log kaydı oluştur
+        log_activity(
+            user=current_user,
+            action="Remediation Applied",
+            details=f"Firewall rule applied: {incident.suggested_firewall_rule}",
+            incident=incident
+        )
+        
+        flash(f"Firewall rule successfully applied to Perimeter FW: {incident.suggested_firewall_rule}", "success")
+    else:
+        flash("No firewall rule available to apply.", "warning")
+        
+    return redirect(url_for('incident_detail', incident_id=incident.id, firewall_applied='true'))
+
 #Not fonksiyonu route 
 @app.route('/incident/<int:incident_id>/add_note', methods=['POST'])
 @login_required

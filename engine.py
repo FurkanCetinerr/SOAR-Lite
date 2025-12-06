@@ -19,6 +19,7 @@ class PlaybookEngine:
             'lock_user_account': actions.lock_user_account,
             'query_edr_for_processes': actions.query_edr_for_processes,
             'submit_hash_to_sandbox': actions.submit_hash_to_sandbox,
+            'generate_firewall_rule': actions.generate_firewall_rule,
         }
         print(f"✅ Playbook engine initialized. Loaded {len(self.playbooks)} playbooks.")
 

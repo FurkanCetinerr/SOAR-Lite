@@ -29,6 +29,9 @@ class Incident(db.Model):
     mitre_technique_id = db.Column(db.String(20), nullable=True)
     mitre_technique_name = db.Column(db.String(100), nullable=True)
     
+    # Firewall kural
+    suggested_firewall_rule = db.Column(db.Text, nullable=True) # Otomatik üretilen kural burada saklanacak
+        
         # --- İlişkiler (Relationships) ---
     # Atanan Kullanıcı (Assignee)
     assignee_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
