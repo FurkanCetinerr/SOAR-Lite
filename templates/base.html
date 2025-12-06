@@ -5,9 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}SOAR-lite Dashboard{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
     <style>
-        body { padding-top: 5rem; }
-        .table-responsive { max-height: 70vh; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* BÜTÜN SAYFANIN KAYMASINI ENGELLE */
+            background-color: #f8f9fa; /* Arka planı hafif gri yap */
+        }
+        body { 
+            padding-top: 56px; /* Navbar yüksekliği (standart) */
+        }
+        /* Kaydırılabilir ana içerik alanı */
+        .main-content-scrollable {
+            height: calc(100vh - 56px); /* Ekran yüksekliği EKSİ navbar */
+            overflow-y: auto; /* SADECE BU ALAN DİKEYDE KAYSIN */
+            padding: 1rem; /* p-5 (3rem) yerine 1rem (daha kompakt) */
+        }
+        /* Grafiklerin uzayıp gitmemesi için standart bir yükseklik */
+        .chart-container {
+            position: relative;
+            height: 300px; /* TÜM GRAFİKLER İÇİN KOMPAKT YÜKSEKLİK */
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -34,28 +55,27 @@
                     {% endif %}
                     {% if current_user.is_authenticated and current_user.role in ['Admin', 'Manager'] %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('activity_log') }}">Users Activities Logs</a>
+                        <a class="nav-link" href="{{ url_for('activity_log') }}">Aktivite Logları</a>
                     </li>
                     {% endif %}
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
-
                     <li class="nav-item">
-                        <span class="navbar-text me-2">Welcome, {{ current_user.username }}</span>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link position-relative" href="{{ url_for('notifications') }}"> <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-bell-fill" viewBox="0 0 16 16">
+                        <a class="nav-link position-relative" href="{{ url_for('notifications') }}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-bell-fill" viewBox="0 0 16 16">
                                 <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/>
                             </svg>
                             {% if unread_notifications > 0 %}
                             <span class="position-absolute top-1 start-80 translate-middle badge rounded-pill bg-danger">
-                            {{ unread_notifications }}
-                            <span class="visually-hidden">unread messages</span>    
+                                {{ unread_notifications }}
                             </span>
                             {% endif %}
                         </a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="navbar-text me-2">Welcome, {{ current_user.username }}</span>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
@@ -73,30 +93,14 @@
         </div>
     </nav>
 
-<main class="container">
-    {% if current_user.is_authenticated %}
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="container mt-3">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-    {% endif %}
-    <div class="bg-light p-5 rounded">
-        {% block content %}{% endblock %}
+    <div class="main-content-scrollable"> 
+        <main class="container-fluid"> {% block content %}{% endblock %}
+        </main>
     </div>
-</main>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-{% block scripts %}{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
 
 </body>
 </html>

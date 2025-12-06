@@ -119,8 +119,100 @@
                         <div class="tab-content" id="enrichmentTabContent-{{ obs.id }}">
                             {% for enrichment in obs.enrichments %}
                             <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="content-{{ enrichment.source | replace(' ','-') }}-{{ obs.id }}" role="tabpanel">
-                                <h6 class="mt-3">Raw JSON Data from {{ enrichment.source }}</h6>
-                                <pre style="background-color: #f5f5f5; border: 1px solid #ccc; padding: 10px; border-radius: 4px; word-wrap: break-word; white-space: pre-wrap;">{{ enrichment.raw_data | tojson(indent=2) }}</pre>
+                                
+                                {% set data = enrichment.raw_data | from_json %}
+                        
+                                <div class="p-3">
+                                    
+                                    {% if enrichment.source == 'VirusTotal' %}
+                                        <div class="text-center">
+                                            <h6 class="text-muted mb-3">Detection Ratio</h6>
+                                            <h1 class="display-3 fw-bold {% if data.get('count', 0) > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                <i class="bi bi-shield-{% if data.get('count', 0) > 0 %}x{% else %}check{% endif %}"></i>
+                                                {{ data.get('count', 0) }}
+                                            </h1>
+                                            <p class="lead">security vendors flagged this as malicious.</p>
+                                            
+                                            <a href="{{ data.get('link', '#') }}" target="_blank" class="btn btn-outline-primary mt-2">
+                                                <i class="bi bi-box-arrow-up-right"></i> View Full Report on VirusTotal
+                                            </a>
+                                        </div>
+                        
+                                    {% elif enrichment.source == 'AbuseIPDB' %}
+                                        <div class="row">
+                                            <div class="col-md-12 mb-4 text-center">
+                                                <h6 class="text-muted">Abuse Confidence Score</h6>
+                                                <h2 class="display-5 fw-bold text-warning">{{ data.get('abuseConfidenceScore', 0) }}%</h2>
+                                                <div class="progress" style="height: 10px;">
+                                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ data.get('abuseConfidenceScore', 0) }}%"></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <ul class="list-group">
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <strong>IP Address</strong> <span>{{ data.get('ipAddress') }}</span>
+                                                    </li>
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <strong>Total Reports</strong> <span class="badge bg-secondary rounded-pill">{{ data.get('totalReports') }}</span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <ul class="list-group">
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <strong>ISP</strong> <span>{{ data.get('isp') | truncate(20) }}</span>
+                                                    </li>
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <strong>Country</strong> <span>{{ data.get('countryCode') }}</span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                        
+                                    {% elif enrichment.source == 'Hybrid Analysis' %}
+                                        <div class="alert alert-light border">
+                                            <h5 class="alert-heading">Sandbox Analysis Status</h5>
+                                            <hr>
+                                            {% if data.get('verdict') %}
+                                                <p class="mb-0"><strong>Verdict:</strong> <span class="badge bg-danger">{{ data.get('verdict') }}</span></p>
+                                                <p><strong>Threat Score:</strong> {{ data.get('threat_score', 'N/A') }}/100</p>
+                                            {% elif data.get('job_id') %}
+                                                <p class="mb-0"><strong>Status:</strong> <span class="badge bg-info">Submitted</span></p>
+                                                <p><strong>Job ID:</strong> <code>{{ data.get('job_id') }}</code></p>
+                                                <p class="small text-muted">Analysis is running. Please check back later using the Job ID.</p>
+                                            {% else %}
+                                                <p>{{ data.get('message', 'No detail available.') }}</p>
+                                            {% endif %}
+                                        </div>
+                        
+                                    {% else %}
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-striped table-sm">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width: 30%">Field</th>
+                                                        <th>Value</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for key, value in data.items() %}
+                                                    <tr>
+                                                        <td class="fw-bold text-secondary">{{ key | replace('_', ' ') | title }}</td>
+                                                        <td>
+                                                            {% if value is iterable and value is not string %}
+                                                                {{ value | join(', ') }}
+                                                            {% else %}
+                                                                <div style="max-height: 100px; overflow-y: auto;">{{ value }}</div>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% endif %}
+                                    
+                                </div>
                             </div>
                             {% endfor %}
                         </div>

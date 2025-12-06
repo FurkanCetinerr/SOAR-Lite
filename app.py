@@ -1,7 +1,7 @@
 # app.py
 import time
 import re
-
+import json
 from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort
 from engine import PlaybookEngine
 from database import db, Incident, Note, User, Notification, UserActivityLog, Observable
@@ -55,6 +55,15 @@ def role_required(*roles):
 app = create_app()
 engine = PlaybookEngine()
 correlation_engine = CorrelationEngine(playbook_engine=engine)
+
+# --- İNCİDENT DETAİL İÇİN FİLTRE ---
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Metin formatındaki JSON verisini Python sözlüğüne çevirir."""
+    try:
+        return json.loads(value)
+    except (ValueError, TypeError):
+        return {} # Hata olursa boş veri döndür
 
 # --- OTURUM YÖNETİMİ ROTALARI ---
 #login route
@@ -133,10 +142,12 @@ def format_timedelta(seconds):
     if minutes > 0: parts.append(f"{minutes} min")
     return " ".join(parts) if parts else "< 1 min"
 
+# app.py -> dashboard fonksiyonunun tamamı
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # 1. ZAMAN FİLTRESİNİ AL VE HESAPLA (Aynı)
+    # 1. ZAMAN FİLTRESİNİ AL VE HESAPLA
     current_range = request.args.get('range', '30d') 
     now_utc = datetime.now(timezone.utc)
     start_time = None
@@ -151,26 +162,23 @@ def dashboard():
         current_range = '30d' 
         start_time = now_utc - timedelta(days=30)
     
-    # 2. FİLTRELENMİŞ TEMEL SORGU (BASE QUERY) (Aynı)
+    # 2. FİLTRELENMİŞ TEMEL SORGU (BASE QUERY)
     base_query = Incident.query
     if start_time:
         base_query = base_query.filter(Incident.created_at >= start_time)
 
-    # --- KPI Kartları (Filtreli) (Aynı) ---
+    # --- KPI Kartları (Filtreli) ---
     total_incidents = base_query.count()
     new_incidents = base_query.filter_by(status='New').count()
     
-    # --- DÜZELTİLMİŞ SORGULAR (select_from yerine with_entities kullanarak) ---
-    
-    # Severities (SAWarning Düzeltildi)
+    # Severities
     severities_data = base_query.with_entities(
         Incident.severity, func.count(Incident.severity)
     ).filter(Incident.severity.isnot(None)).group_by(Incident.severity).all()
     severities = {s: c for s, c in severities_data}
 
-    # --- Çizgi Grafik (Son 7 Gün - Değişiklik yok) ---
-    today = datetime.utcnow().date()
-    # ... (Geri kalanı aynı, burayı kısaltıyorum) ...
+    # --- Çizgi Grafik (Son 7 Gün - Sabit) ---
+    today = datetime.utcnow().date() # veya datetime.now(timezone.utc).date()
     daily_counts = db.session.query(
         func.date(Incident.created_at), func.count(Incident.id)
     ).filter(Incident.created_at >= (today - timedelta(days=6))).group_by(
@@ -187,7 +195,7 @@ def dashboard():
     line_chart_labels = [item[0] for item in sorted_chart_data]
     line_chart_values = [item[1] for item in sorted_chart_data]
 
-    # --- Diğer Grafikler (SAWarning Düzeltildi) ---
+    # --- Diğer Grafikler ---
     event_type_data = base_query.with_entities(
         Incident.event_type, func.count(Incident.event_type)
     ).group_by(Incident.event_type).all()
@@ -208,24 +216,13 @@ def dashboard():
     bar_top_alerts_labels = [item[0] for item in top_alerts_data]
     bar_top_alerts_values = [item[1] for item in top_alerts_data]
     
-    mitre_data = base_query.with_entities(
-        Incident.mitre_technique_name, func.count(Incident.mitre_technique_name)
-    ).filter(Incident.mitre_technique_name.isnot(None)).group_by(
-        Incident.mitre_technique_name
-    ).order_by(func.count(Incident.mitre_technique_name).desc()).all()
-    pie_mitre_labels = [item[0] for item in mitre_data]
-    pie_mitre_values = [item[1] for item in mitre_data]
-
-    # --- Analist Performans (InvalidRequestError DÜZELTİLDİ) ---
-    
-    # 1. Önce açık olaylar için temel sorguyu oluştur (filtreli)
+    # --- Analist Performans ---
     open_incidents_query = Incident.query.filter(Incident.status != 'Closed')
     if start_time:
         open_incidents_query = open_incidents_query.filter(Incident.created_at >= start_time)
         
-    # 2. BU SORGUDAN BAŞLAYARAK JOIN VE GROUP BY YAP
     open_incidents_by_assignee = open_incidents_query.join(
-            User, Incident.assignee_id == User.id # .join(Incident.assignee) yerine açıkça yazalım
+            User, Incident.assignee_id == User.id 
         ).with_entities(
             User.username, 
             func.count(Incident.id)
@@ -234,14 +231,17 @@ def dashboard():
     assignee_labels = [item[0] for item in open_incidents_by_assignee]
     assignee_values = [item[1] for item in open_incidents_by_assignee]
 
-    # MTTR (Zaman Filtreli - Değişiklik yok)
+    # MTTR
     closed_incidents = base_query.filter(Incident.status == 'Closed', Incident.closed_at.isnot(None)).all()
     total_resolution_time = timedelta(0)
     resolved_count = 0
     if closed_incidents:
         for incident in closed_incidents:
-            created = incident.created_at.replace(tzinfo=timezone.utc)
-            closed = incident.closed_at.replace(tzinfo=timezone.utc)
+            # Timezone-aware hale getir (basitlik için UTC varsayıyoruz)
+            created = incident.created_at
+            closed = incident.closed_at
+            # Eğer offset-naive ise (SQLite default), hata vermemesi için elle işlem yapalım:
+            # (Gerçek uygulamada pytz veya timezone kullanmak daha iyidir)
             total_resolution_time += (closed - created)
             resolved_count += 1
     average_resolution_time_seconds = 0
@@ -249,52 +249,51 @@ def dashboard():
         average_resolution_time_seconds = total_resolution_time.total_seconds() / resolved_count
     mttr_formatted = format_timedelta(average_resolution_time_seconds)
 
-    # Son Kapatılanlar (Filtresiz - Değişiklik yok)
+    # Son Kapatılanlar (Filtresiz)
     recently_closed = Incident.query.filter(
             Incident.status == 'Closed', 
             Incident.closed_at.isnot(None)
         ).order_by(Incident.closed_at.desc()).limit(5).all()
     
-    # --- YENİ SORGULAR: FAZ 2 - TEHDİT MANZARASI ---
+    # --- YENİ SORGULAR: TEHDİT MANZARASI ---
 
-    # 1. En Çok Görülen MITRE Teknikleri (Bar Grafik)
-    # base_query'miz zaten zaman filtresini içeriyor.
+    # 1. En Çok Görülen MITRE Teknikleri
     mitre_data = base_query.with_entities(
         Incident.mitre_technique_name, func.count(Incident.mitre_technique_name)
     ).filter(Incident.mitre_technique_name.isnot(None)).group_by(
         Incident.mitre_technique_name
     ).order_by(func.count(Incident.mitre_technique_name).desc()).limit(5).all()
-
-    # Not: Bu sorgu, bir önceki adımdaki pie_mitre_labels ile aynı olabilir,
-    # ama bariz olması için yeni değişken adları kullanalım:
+    
     mitre_bar_labels = [item[0] for item in mitre_data]
     mitre_bar_values = [item[1] for item in mitre_data]
 
-    # 2. En Çok Görülen Zararlı IP/Domain'ler (vt_score > 5 olanlar)
-    # Bu yeni bir sorgu, Incident ve Observable tablolarını join etmeliyiz.
+    # 2. En Çok Görülen Zararlı IP/Domain'ler
+    # Join'i açıkça belirtelim:
     top_obs_query = db.session.query(
             Observable.value, 
             func.count(Observable.value)
         ).join(Incident, Observable.incident_id == Incident.id).filter(
-         Observable.type.in_(['ip', 'domain']),
-            Observable.vt_score > 5  # Sadece skoru 5'ten yüksek olanları "zararlı" sayalım
+            Observable.type.in_(['ip', 'domain']),
+            Observable.vt_score > 5
         )
-
-    # Zaman filtresini bu sorguya da uygula
+    
     if start_time:
         top_obs_query = top_obs_query.filter(Incident.created_at >= start_time)
-
+        
     top_obs_data = top_obs_query.group_by(Observable.value).order_by(
         func.count(Observable.value).desc()
     ).limit(5).all()
-
+    
     top_obs_labels = [item[0] for item in top_obs_data]
     top_obs_values = [item[1] for item in top_obs_data]
 
-# ------------------------------------------------
-    
-    
-    # --- RENDER TEMPLATE (Değişiklik yok) ---
+    # --- EKSİK OLAN: ATANMAMIŞ OLAYLAR KUYRUĞU ---
+    unassigned_incidents = Incident.query.filter(
+        Incident.assignee_id == None,
+        Incident.status.in_(['New', 'Escalated'])
+    ).order_by(Incident.created_at.desc()).all()
+
+    # --- RENDER TEMPLATE ---
     return render_template('dashboard.html',
                            current_range=current_range,
                            total_incidents=total_incidents,
@@ -308,19 +307,17 @@ def dashboard():
                            pie_status_values=pie_status_values,
                            bar_top_alerts_labels=bar_top_alerts_labels,
                            bar_top_alerts_values=bar_top_alerts_values,
-                           pie_mitre_labels=pie_mitre_labels,
-                           pie_mitre_values=pie_mitre_values,
                            assignee_labels=assignee_labels,
                            assignee_values=assignee_values,
                            mttr_formatted=mttr_formatted,
                            recently_closed=recently_closed,
-                           # --- YENİ EKLENEN TEHDİT MANZARASI VERİLERİ ---
                            mitre_bar_labels=mitre_bar_labels,
                            mitre_bar_values=mitre_bar_values,
                            top_obs_labels=top_obs_labels,
-                           top_obs_values=top_obs_values
+                           top_obs_values=top_obs_values,
+                           unassigned_incidents=unassigned_incidents # <-- EKLENDİ
                            )
-
+    
 @app.route('/incidents')
 @login_required
 def incidents_list():
@@ -387,7 +384,7 @@ def update_status(incident_id):
         # --- YENİ MANTIK ---
         # Eğer yeni durum 'Closed' ise, closed_at zamanını ayarla
         if new_status == 'Closed':
-            incident.closed_at = datetime.utcnow() # VEYA datetime.now(datetime.UTC) Python 3.12+
+            incident.closed_at = datetime.now(timezone.utc) # VEYA datetime.now(datetime.UTC) Python 3.12+
         # Eğer olay 'Closed' durumundan çıkarılıyorsa, closed_at zamanını temizle
         elif old_status == 'Closed' and new_status != 'Closed':
             incident.closed_at = None

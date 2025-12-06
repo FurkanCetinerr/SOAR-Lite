@@ -5,54 +5,52 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">SOC Dashboard</h1>
-</div>
-
-<div class="btn-toolbar mb-2 mb-md-0">
-    <div class="btn-group me-2">
-        <a href="{{ url_for('dashboard', range='24h') }}" 
-           class="btn btn-sm btn-outline-secondary {% if current_range == '24h' %}active{% endif %}">
-           Son 24 Saat
-        </a>
-        <a href="{{ url_for('dashboard', range='7d') }}" 
-           class="btn btn-sm btn-outline-secondary {% if current_range == '7d' %}active{% endif %}">
-           Son 7 Gün
-        </a>
-        <a href="{{ url_for('dashboard', range='30d') }}" 
-           class="btn btn-sm btn-outline-secondary {% if current_range == '30d' %}active{% endif %}">
-           Son 30 Gün
-        </a>
-        <a href="{{ url_for('dashboard', range='all') }}" 
-           class="btn btn-sm btn-outline-secondary {% if current_range == 'all' %}active{% endif %}">
-           Tüm Zamanlar
-        </a>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('dashboard', range='24h') }}" 
+               class="btn btn-sm btn-outline-secondary {% if current_range == '24h' %}active{% endif %}">
+               Son 24 Saat
+            </a>
+            <a href="{{ url_for('dashboard', range='7d') }}" 
+               class="btn btn-sm btn-outline-secondary {% if current_range == '7d' %}active{% endif %}">
+               Son 7 Gün
+            </a>
+            <a href="{{ url_for('dashboard', range='30d') }}" 
+               class="btn btn-sm btn-outline-secondary {% if current_range == '30d' %}active{% endif %}">
+               Son 30 Gün
+            </a>
+            <a href="{{ url_for('dashboard', range='all') }}" 
+               class="btn btn-sm btn-outline-secondary {% if current_range == 'all' %}active{% endif %}">
+               Tüm Zamanlar
+            </a>
+        </div>
     </div>
 </div>
-
 <div class="form-check form-switch mt-2 mb-3">
     <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshSwitch">
     <label class="form-check-label" for="autoRefreshSwitch">Otomatik Yenilemeyi Aç (Her 60 saniyede bir)</label>
 </div>
 
 <div class="row">
-    <div class="col-md-3">
+    <div class="col-lg-3 col-md-6">
         <div class="card text-white bg-primary mb-3">
             <div class="card-header">Total Incidents</div>
             <div class="card-body"><h5 class="card-title display-4">{{ total_incidents }}</h5></div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-3 col-md-6">
         <div class="card text-white bg-success mb-3">
             <div class="card-header">New Incidents</div>
             <div class="card-body"><h5 class="card-title display-4">{{ new_incidents }}</h5></div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-3 col-md-6">
         <div class="card bg-danger text-white mb-3">
             <div class="card-header">High Severity</div>
             <div class="card-body"><h5 class="card-title display-4">{{ severities.get('high', 0) }}</h5></div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-3 col-md-6">
         <div class="card bg-warning text-dark mb-3">
             <div class="card-header">Medium Severity</div>
             <div class="card-body"><h5 class="card-title display-4">{{ severities.get('medium', 0) }}</h5></div>
@@ -61,43 +59,89 @@
 </div>
 
 <div class="row">
-    <div class="col-xl-6">
-        <div class="card mb-4">
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
             <div class="card-header">Alerts Distribution by Type</div>
-            <div class="card-body"><canvas id="eventTypeChart"></canvas></div>
+            <div class="card-body chart-container">
+                <canvas id="eventTypeChart"></canvas>
+            </div>
         </div>
     </div>
-    <div class="col-xl-6">
-        <div class="card mb-4">
+
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
             <div class="card-header">Case Distribution by Status</div>
-            <div class="card-body"><canvas id="statusChart"></canvas></div>
+            <div class="card-body chart-container">
+                <canvas id="statusChart"></canvas>
+            </div>
         </div>
     </div>
-</div>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card mb-4">
-            <div class="card-header">Top 5 Recurring Alerts</div>
-            <div class="card-body"><canvas id="topAlertsChart"></canvas></div>
+
+    <div class="col-lg-4 mb-4">
+        <div class="card bg-info text-white mb-3">
+            <div class="card-header">Average Time to Resolve (MTTR)</div>
+            <div class="card-body text-center py-4">
+                <h5 class="card-title display-5">{{ mttr_formatted }}</h5>
+            </div>
         </div>
-    </div>
-</div>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card mb-4">
-            <div class="card-header">Incident Trend (Last 7 Days)</div>
-            <div class="card-body"><canvas id="incidentTrendChart"></canvas></div>
+        <div class="card">
+            <div class="card-header">Recently Closed Incidents (Last 5)</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush" style="max-height: 180px; overflow-y: auto;">
+                    {% for incident in recently_closed %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            <a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a>
+                            <small class="d-block text-muted">{{ incident.event_type | truncate(20) }}</Ssmall>
+                        </span>
+                        <span class="badge bg-secondary rounded-pill">
+                            {% set duration = incident.closed_at.replace(tzinfo=None) - incident.created_at.replace(tzinfo=None) %}
+                            {% set total_seconds = duration.total_seconds() %}
+                            {% set hours = (total_seconds // 3600)|int %}
+                            {% set minutes = ((total_seconds % 3600) // 60)|int %}
+                            {{ '%02dh %02dm'|format(hours, minutes) }}
+                             by {{ incident.assignee.username if incident.assignee else 'N/A' }}
+                        </span>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-muted text-center p-3">No closed incidents.</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
 </div>
 
-<hr class="my-4"> <h2 class="h3 mb-3">Analyst & Team Performance</h2>
-
 <div class="row">
-    <div class="col-xl-6 mb-4">
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Top 5 MITRE ATT&CK® Techniques</div>
+            <div class="card-body chart-container">
+                {% if mitre_bar_labels %}
+                    <canvas id="mitreBarChart"></canvas>
+                {% else %}
+                    <p class="text-muted text-center my-3">No MITRE data found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Top 5 Malicious Observables (VT > 5)</div>
+            <div class="card-body chart-container">
+                 {% if top_obs_labels %}
+                    <canvas id="topObservablesChart"></canvas>
+                {% else %}
+                    <p class="text-muted text-center my-3">No malicious observables found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 mb-4">
         <div class="card h-100">
             <div class="card-header">Open Incidents by Assignee</div>
-            <div class="card-body">
+            <div class="card-body chart-container">
                 {% if assignee_labels %}
                     <canvas id="assigneeChart"></canvas>
                 {% else %}
@@ -106,54 +150,32 @@
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-xl-6 mb-4">
-        <div class="row">
-            <div class="col-12 mb-4">
-                 <div class="card bg-info text-white">
-                    <div class="card-header">Average Time to Resolve (MTTR)</div>
-                    <div class="card-body">
-                        <h5 class="card-title display-5">{{ mttr_formatted }}</h5>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">Recently Closed Incidents (Last 5)</div>
-                    <div class="card-body p-0"> {# Padding'i kaldırıp listeyi tam oturtalım #}
-                        <ul class="list-group list-group-flush">
-                            {% for incident in recently_closed %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <span>
-                                    <a href="{{ url_for('incident_detail', incident_id=incident.id) }}">#{{ incident.id }}</a> - 
-                                    <small>{{ incident.event_type }}</small>
-                                </span>
-                                <span class="badge bg-secondary rounded-pill">
-                                    {{ (incident.closed_at.replace(tzinfo=None) - incident.created_at.replace(tzinfo=None)) | string | replace(' days, ', 'd ') | replace(' day, ', 'd ') | replace(':','h ', 1) | replace(':','m') | replace('s','') | replace('.','') | truncate(15) }}
-                                     by {{ incident.assignee.username if incident.assignee else 'N/A' }}
-                                </span>
-                            </li>
-                            {% else %}
-                            <li class="list-group-item text-muted text-center">No closed incidents yet.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Incident Trend (Last 7 Days)</div>
+            <div class="card-body chart-container"> <canvas id="incidentTrendChart"></canvas>
             </div>
         </div>
     </div>
-
-    <hr class="my-4">
-<h2 class="h3 mb-3">Operational Queues</h2>
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Top 5 Recurring Alerts</div>
+            <div class="card-body chart-container"> <canvas id="topAlertsChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row">
-    <div class="col-md-12">
-        <div class="card mb-4">
+    <div class="col-md-12 mb-4">
+        <div class="card">
             <div class="card-header fw-bold">Unassigned Incidents Queue (New & Escalated)</div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                    <table class="table table-sm table-hover align-items-center">
+                    <table class="table table-sm table-hover align-items-center mb-0">
                         <thead>
                             <tr>
                                 <th>Severity</th>
@@ -186,13 +208,13 @@
                                 <td>
                                     <form action="{{ url_for('assign_incident', incident_id=incident.id) }}" method="POST" style="display:inline-block;">
                                         <input type="hidden" name="assignee_id" value="claim_for_myself">
-                                        <button type-="submit" class="btn btn-success btn-sm py-0">Claim</button>
+                                        <button type="submit" class="btn btn-success btn-sm py-0">Claim</button>
                                     </form>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted">There are no unassigned events. Good Job!</td>
+                                <td colspan="6" class="text-center text-muted p-3">There are no unassigned events. Good Job!</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -202,42 +224,6 @@
         </div>
     </div>
 </div>
-
-<hr class="my-4">
-
-<h2 class="h3 mb-3">Threat Landscape (Filtered)</h2>
-
-<div class="row">
-    <div class="col-xl-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">Top 5 MITRE ATT&CK® Techniques</div>
-            <div class="card-body">
-                {% if mitre_bar_labels %}
-                    <canvas id="mitreBarChart"></canvas>
-                {% else %}
-                    <p class="text-muted text-center my-3">No MITRE data found for this period.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">Top 5 Malicious Observables (VT Score > 5)</div>
-            <div class="card-body">
-                 {% if top_obs_labels %}
-                    <canvas id="topObservablesChart"></canvas>
-                {% else %}
-                    <p class="text-muted text-center my-3">No malicious observables found for this period.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-</div>
-
-<a href="{{ url_for('incidents_list') }}" class="btn btn-dark mt-3">View All Incidents &raquo;</a>
 {% endblock %}
 
 
@@ -254,126 +240,151 @@ document.addEventListener('DOMContentLoaded', function () {
         'rgba(54, 162, 235, 0.7)'
     ];
 
-    // --- YENİ EKLENEN OTOMATİK YENİLEME KODU ---
+    // --- OTOMATİK YENİLEME KODU ---
     const autoRefreshSwitch = document.getElementById('autoRefreshSwitch');
-    let refreshInterval; // Yenileme zamanlayıcısını tutmak için değişken
-
-    // 1. Sayfa yüklendiğinde, localStorage'daki eski ayarı kontrol et
+    let refreshInterval; 
     if (localStorage.getItem('autoRefreshEnabled') === 'true') {
-        autoRefreshSwitch.checked = true; // Switch'i "açık" yap
-        startRefresh(); // ve yenilemeyi başlat
+        autoRefreshSwitch.checked = true; 
+        startRefresh(); 
     }
-
-    // 2. Switch'e tıklandığında ne olacağını belirle
     autoRefreshSwitch.addEventListener('click', function() {
         if (this.checked) {
-            // Eğer "açık" konuma getirildiyse
-            localStorage.setItem('autoRefreshEnabled', 'true'); // Ayarı kaydet
-            startRefresh(); // Yenilemeyi başlat
+            localStorage.setItem('autoRefreshEnabled', 'true'); 
+            startRefresh(); 
         } else {
-            // Eğer "kapalı" konuma getirildiyse
-            localStorage.setItem('autoRefreshEnabled', 'false'); // Ayarı kaydet
-            stopRefresh(); // Yenilemeyi durdur
+            localStorage.setItem('autoRefreshEnabled', 'false'); 
+            stopRefresh(); 
         }
     });
-
-    // 3. Yenilemeyi başlatan fonksiyon
     function startRefresh() {
-        // Zaten çalışan bir yenileme varsa diye önce temizle
         if (refreshInterval) {
             clearInterval(refreshInterval);
         }
-        // 60 saniyede bir sayfayı yenile (60000 milisaniye)
         refreshInterval = setInterval(function() {
             console.log("Auto-refreshing dashboard...");
-            window.location.reload(); // Sayfayı yenile
+            window.location.reload(); 
         }, 60000); 
     }
-
-    // 4. Yenilemeyi durduran fonksiyon
     function stopRefresh() {
         if (refreshInterval) {
             clearInterval(refreshInterval);
-            refreshInterval = null; // Zamanlayıcıyı sıfırla
+            refreshInterval = null; 
             console.log("Auto-refresh stopped.");
         }
     }
     // --- OTOMATİK YENİLEME KODU SONU ---
 
+    // --- GRAFİKLER ---
+    // (Tüm 'new Chart' kodları, yükseklik sorununu çözmek için
+    // 'maintainAspectRatio: false' seçeneğini içerir)
+
     // 1. Olay Tipi Dağılımı (Pasta Grafik)
-    new Chart(document.getElementById('eventTypeChart'), {
-        type: 'pie',
-        data: {
-            labels: {{ pie_event_type_labels|tojson }},
-            datasets: [{ data: {{ pie_event_type_values|tojson }}, backgroundColor: colors }]
-        },
-        options: { responsive: true }
-    });
+    try {
+        const eventTypeCtx = document.getElementById('eventTypeChart');
+        const eventTypeLabels = {{ pie_event_type_labels|tojson|safe }};
+        const eventTypeValues = {{ pie_event_type_values|tojson|safe }};
+        if (eventTypeCtx && eventTypeLabels && eventTypeLabels.length > 0) {
+            new Chart(eventTypeCtx, {
+                type: 'pie',
+                data: {
+                    labels: eventTypeLabels,
+                    datasets: [{ data: eventTypeValues, backgroundColor: colors }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+    } catch(e) { console.error("Error rendering eventTypeChart", e); }
+
 
     // 2. Duruma Göre Dağılım (Donut Grafik)
-    new Chart(document.getElementById('statusChart'), {
-        type: 'doughnut',
-        data: {
-            labels: {{ pie_status_labels|tojson }},
-            datasets: [{ data: {{ pie_status_values|tojson }}, backgroundColor: colors }]
-        },
-        options: { responsive: true }
-    });
+    try {
+        const statusCtx = document.getElementById('statusChart');
+        const statusLabels = {{ pie_status_labels|tojson|safe }};
+        const statusValues = {{ pie_status_values|tojson|safe }};
+        if (statusCtx && statusLabels && statusLabels.length > 0) {
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: statusLabels,
+                    datasets: [{ data: statusValues, backgroundColor: colors }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+    } catch(e) { console.error("Error rendering statusChart", e); }
+
     
     // 3. En Sık Görülen Alarmlar (Çubuk Grafik)
-    new Chart(document.getElementById('topAlertsChart'), {
-        type: 'bar',
-        data: {
-            labels: {{ bar_top_alerts_labels|tojson }},
-            datasets: [{
-                label: '# of Occurrences',
-                data: {{ bar_top_alerts_values|tojson }},
-                backgroundColor: barChartColors,
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            scales: { x: { ticks: { precision: 0 } } },
-            plugins: { legend: { display: false } },
-            responsive: true
+    try {
+        const topAlertsCtx = document.getElementById('topAlertsChart');
+        const topAlertsLabels = {{ bar_top_alerts_labels|tojson|safe }};
+        const topAlertsValues = {{ bar_top_alerts_values|tojson|safe }};
+        if (topAlertsCtx && topAlertsLabels && topAlertsLabels.length > 0) {
+            new Chart(topAlertsCtx, {
+                type: 'bar',
+                data: {
+                    labels: topAlertsLabels,
+                    datasets: [{
+                        label: '# of Occurrences',
+                        data: topAlertsValues,
+                        backgroundColor: barChartColors,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    scales: { x: { ticks: { precision: 0 } } },
+                    plugins: { legend: { display: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
         }
-    });
+    } catch(e) { console.error("Error rendering topAlertsChart", e); }
+
 
     // 4. Olay Trendi (Çizgi Grafik)
-    new Chart(document.getElementById('incidentTrendChart').getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: {{ line_chart_labels|tojson }},
-            datasets: [{
-                label: '# of Incidents',
-                data: {{ line_chart_values|tojson }},
-                fill: true,
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1
-            }]
-        },
-        options: { 
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-            responsive: true 
+    try {
+        const incidentTrendCtx = document.getElementById('incidentTrendChart');
+        const incidentTrendLabels = {{ line_chart_labels|tojson|safe }};
+        const incidentTrendValues = {{ line_chart_values|tojson|safe }};
+        if (incidentTrendCtx && incidentTrendLabels && incidentTrendLabels.length > 0) {
+            new Chart(incidentTrendCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: incidentTrendLabels,
+                    datasets: [{
+                        label: '# of Incidents',
+                        data: incidentTrendValues,
+                        fill: true,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1
+                    }]
+                },
+                options: { 
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
         }
-    });
+    } catch(e) { console.error("Error rendering incidentTrendChart", e); }
+
 
     // 5. Analiste Göre Açık Olaylar (Yatay Bar Grafik)
-    try { // <-- Hata yakalamayı başlat
+    try {
         const assigneeCtx = document.getElementById('assigneeChart');
-        // Hem canvas'ın varlığını hem de verilerin (labels VE values) dolu olup olmadığını kontrol et
         const assigneeLabels = {{ assignee_labels|tojson|safe }};
         const assigneeValues = {{ assignee_values|tojson|safe }};
 
-        if (assigneeCtx && assigneeLabels && assigneeLabels.length > 0 && assigneeValues && assigneeValues.length > 0) {
+        if (assigneeCtx && assigneeLabels && assigneeLabels.length > 0) {
             new Chart(assigneeCtx, {
                 type: 'bar',
                 data: {
-                    labels: assigneeLabels, // Değişkenleri kullan
+                    labels: assigneeLabels, 
                     datasets: [{
                         label: '# of Open Incidents',
-                        data: assigneeValues, // Değişkenleri kullan
+                        data: assigneeValues, 
                         backgroundColor: barChartColors, 
                         borderColor: barChartColors.map(color => color.replace('0.7', '1')),
                         borderWidth: 1
@@ -394,14 +405,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     maintainAspectRatio: false 
                 }
             });
-        } else if (assigneeCtx) {
-             // Eğer canvas varsa ama veri yoksa, "Veri Yok" mesajı gösterilebilir (opsiyonel)
-             // assigneeCtx.parentNode.innerHTML = '<p class="text-muted text-center my-3">No assigned open incidents data to display.</p>';
-             console.log("Assignee chart canvas found, but no data provided."); // Konsola log yazalım
         }
-    } catch (error) { // <-- Hata yakalama sonu
+    } catch (error) { 
         console.error("Error rendering Assignee Chart:", error); 
-        // Hata olursa konsola yazdır ama diğer grafikleri engelleme
     }
 
     // 6. En Çok Görülen MITRE Teknikleri (Yatay Bar Grafik)
@@ -418,12 +424,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     datasets: [{
                         label: '# of Occurrences',
                         data: mitreValues,
-                        backgroundColor: barChartColors.slice(0, mitreLabels.length), // Renkleri kullanalım
+                        backgroundColor: barChartColors.slice(0, mitreLabels.length),
                         borderWidth: 1
                     }]
                 },
                 options: {
-                    indexAxis: 'y', // Yatay bar
+                    indexAxis: 'y', 
                     scales: { x: { ticks: { precision: 0 } } },
                     plugins: { legend: { display: false } },
                     responsive: true,
@@ -454,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }]
                 },
                 options: {
-                    indexAxis: 'y', // Yatay bar
+                    indexAxis: 'y', 
                     scales: { x: { ticks: { precision: 0 } } },
                     plugins: { legend: { display: false } },
                     responsive: true,
