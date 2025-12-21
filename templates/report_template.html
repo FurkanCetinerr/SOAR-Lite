@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Incident Report #{{ incident.id }}</title>
+    <style>
+        /* --- GENEL AYARLAR --- */
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            font-size: 12px;
+        }
+        h1, h2, h3 { color: #2c3e50; margin-bottom: 10px; }
+        h1 { font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+        .text-muted { color: #7f8c8d; }
+        .text-danger { color: #e74c3c; }
+        
+        /* --- BAŞLIK (HEADER) --- */
+        .header-container {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .company-name { font-weight: bold; font-size: 14px; color: #7f8c8d; }
+        
+        /* --- BÖLÜM BAŞLIKLARI --- */
+        .section-header {
+            background-color: #ecf0f1;
+            color: #2c3e50;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-left: 5px solid #2c3e50;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        /* --- TABLOLAR --- */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 10px; text-align: left; vertical-align: top; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; font-weight: bold; color: #555; width: 30%; }
+        /* Zebra Striping için (isteğe bağlı) tr:nth-child(even) { background-color: #f9f9f9; } */
+
+        /* --- ROZETLER (BADGES) --- */
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            display: inline-block; /* PDF motoru için önemli */
+        }
+        .badge-high { background-color: #e74c3c; color: white; }
+        .badge-medium { background-color: #f39c12; color: white; }
+        .badge-low { background-color: #27ae60; color: white; }
+        .badge-status { background-color: #3498db; color: white; }
+
+        /* --- KOD ve TEKNİK ALANLAR --- */
+        .tech-box {
+            background-color: #f4f6f7;
+            border: 1px solid #d5dbdb;
+            padding: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            border-radius: 4px;
+            color: #c0392b;
+        }
+        .details-box {
+            background-color: #fff;
+            border: 1px solid #eee;
+            padding: 12px;
+            font-style: italic;
+            color: #555;
+        }
+
+        /* --- ALT BİLGİ (FOOTER) --- */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0; right: 0;
+            text-align: center;
+            font-size: 9px;
+            color: #aaa;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <div class="company-name">SOAR-lite Platform</div>
+        <h1>Cyber Security Incident Report</h1>
+        <p class="text-muted">Document Generated on: {{ now }} (UTC)</p>
+    </div>
+
+    <div class="section-header">1. Executive Summary</div>
+    <table>
+        <tr>
+            <th>Incident ID</th>
+            <td><strong>#{{ incident.id }}</strong></td>
+        </tr>
+        <tr>
+            <th>Event Type</th>
+            <td style="text-transform: capitalize;">{{ incident.event_type | replace('_', ' ') }}</td>
+        </tr>
+        <tr>
+            <th>Severity Level</th>
+            <td>
+                <span class="badge badge-{{ incident.severity }}">
+                    {{ incident.severity | upper }}
+                </span>
+            </td>
+        </tr>
+        <tr>
+            <th>Current Status</th>
+            <td>
+                <span class="badge badge-status">{{ incident.status }}</span>
+            </td>
+        </tr>
+        <tr>
+            <th>Detected At</th>
+            <td>{{ incident.created_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
+        </tr>
+        <tr>
+            <th>Assigned Analyst</th>
+            <td>{{ incident.assignee.username if incident.assignee else 'Unassigned' }}</td>
+        </tr>
+    </table>
+
+    <div class="section-header">2. Incident Details & Context</div>
+    <div class="details-box">
+        {{ incident.details }}
+    </div>
+    {% if incident.mitre_technique_id %}
+    <p style="margin-top: 10px;">
+        <strong>MITRE ATT&CK® Framework:</strong> 
+        <span style="color: #d35400;">{{ incident.mitre_technique_id }} - {{ incident.mitre_technique_name }}</span>
+    </p>
+    {% endif %}
+
+    <div class="section-header">3. Automated Response Action</div>
+    <p>The system analyzed the threat and generated the following containment rule:</p>
+    {% if incident.suggested_firewall_rule %}
+        <div class="tech-box">
+            $ {{ incident.suggested_firewall_rule }}
+        </div>
+        <p class="text-muted" style="font-size: 10px; margin-top: 5px;">* Status: Awaiting analyst approval for deployment.</p>
+    {% else %}
+        <p class="text-muted">No automated firewall rule was generated for this specific event type.</p>
+    {% endif %}
+
+    <div class="section-header">4. Indicators of Compromise (IOCs) & Enrichment</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%">Type</th>
+                <th style="width: 40%">Value</th>
+                <th style="width: 45%">Enrichment Summary</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for obs in incident.observables %}
+            <tr>
+                <td><span style="font-weight: bold; font-size: 10px; color: #555;">{{ obs.type | upper }}</span></td>
+                <td style="font-family: monospace;">{{ obs.value }}</td>
+                <td>
+                    {% if obs.enrichments %}
+                        <ul style="margin: 0; padding-left: 15px;">
+                        {% for enrich in obs.enrichments %}
+                           <li><strong>{{ enrich.source }}:</strong> <span class="text-danger">{{ enrich.summary }}</span></li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <span class="text-muted">No enrichment data available.</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3" class="text-muted">No observables extracted for this incident.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="section-header">5. Investigation Timeline & Notes</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 25%">Timestamp (UTC)</th>
+                <th style="width: 20%">User</th>
+                <th>Action / Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for note in incident.notes %}
+            <tr>
+                <td>{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><strong>{{ note.user.username }}</strong></td>
+                <td>{{ note.content }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3" class="text-muted">No manual notes added to the timeline yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p>CONFIDENTIAL | SOAR-lite Project v1.0 | Generated for internal use only.</p>
+    </div>
+
+</body>
+</html>

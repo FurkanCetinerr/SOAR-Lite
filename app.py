@@ -10,6 +10,9 @@ from correlation_engine import CorrelationEngine
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps 
 from sqlalchemy import func, cast, Interval, or_
+from io import BytesIO
+from xhtml2pdf import pisa
+from flask import send_file
 
 # Geçici olayları ve zaman damgalarını saklamak için basit bir önbellek
 EVENT_CACHE = []
@@ -630,6 +633,41 @@ def activity_log():
     # Logları en yeniden eskiye doğru sırala
     logs = UserActivityLog.query.order_by(UserActivityLog.timestamp.desc()).all()
     return render_template('activity_log.html', logs=logs)    
+
+#pdf format
+@app.route('/incident/<int:incident_id>/export_pdf')
+@login_required
+def export_incident_pdf(incident_id):
+    # 1. Veriyi çek
+    incident = Incident.query.get_or_404(incident_id)
+    
+    # 2. HTML şablonunu verilerle render et (Şu anki zamanı da gönderelim)
+    rendered_html = render_template('report_template.html', 
+                                    incident=incident, 
+                                    now=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+    
+    # 3. PDF oluşturma
+    pdf_buffer = BytesIO()
+    pisa_status = pisa.CreatePDF(
+        src=rendered_html,     # HTML Kaynağı
+        dest=pdf_buffer        # Hedef (Hafızadaki dosya)
+    )
+
+    # 4. Hata kontrolü
+    if pisa_status.err:
+        flash('Error creating PDF report.', 'danger')
+        return redirect(url_for('incident_detail', incident_id=incident_id))
+
+    # 5. Dosyayı indirilebilir olarak sun
+    pdf_buffer.seek(0)
+    filename = f"Incident_Report_{incident_id}_{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    
+    return send_file(
+        pdf_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
