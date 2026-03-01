@@ -24,7 +24,7 @@ def create_app():
     app = Flask(__name__)
     
     # --- YENİ VERİTABANI BAĞLANTI MANTIĞI ---
-    veritabani_linki = os.environ.get('DATABASE_URL')
+    veritabani_linki = os.environ.get('postgresql://neondb_owner:npg_EUCzghVvJr40@ep-broad-base-allotntb-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require')
     
     if veritabani_linki:
         # Eğer Render'da çalışıyorsa (buluttaysa) Neon Postgres'i kullan
