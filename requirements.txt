@@ -9,3 +9,6 @@ requests
 python-whois
 dnspython
 python-dotenv
+shodan
+vt-py
+pytz
