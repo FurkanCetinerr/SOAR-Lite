@@ -2,6 +2,7 @@
 import time
 import re
 import json
+import os
 from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort
 from engine import PlaybookEngine
 from database import db, Incident, Note, User, Notification, UserActivityLog, Observable
@@ -21,10 +22,21 @@ CACHE_LIFETIME_SECONDS = 60 # Olayları 60 saniye (1 dakika) boyunca sakla
 def create_app():
     
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///soar.db'
+    
+    # --- YENİ VERİTABANI BAĞLANTI MANTIĞI ---
+    veritabani_linki = os.environ.get('DATABASE_URL')
+    
+    if veritabani_linki:
+        # Eğer Render'da çalışıyorsa (buluttaysa) Neon Postgres'i kullan
+        app.config['SQLALCHEMY_DATABASE_URI'] = veritabani_linki
+    else:
+        # Eğer senin bilgisayarındaysa eski SQLite'ı kullanmaya devam et
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///soar.db'
+        
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
     # WTF-Forms ve Flash mesajları için Secret Key GEREKLİDİR
-    app.config['SECRET_KEY'] = 'bunu-mutlaka-guvenli-ve-rastgele-bir-degerle-degistir'
+    app.config['SECRET_KEY'] = 'pass123'
 
     db.init_app(app)
 

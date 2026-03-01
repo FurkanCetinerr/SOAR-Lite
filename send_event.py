@@ -12,7 +12,7 @@ malicious_ip_event = {
     "event_type": "malicious_ip_detected",
     "source": "suricata",
     # Eski IP yerine, AbuseIPDB'de sıkça raporlanan bir IP (Örnek: Kötüye kullanılan bir VPN/Proxy IP'si)
-    "ip": "193.161.193.99", 
+    "ip": "123.249.100.226", 
     "confidence": 0.95,
     "details": "Suricata sig ET MALWARE Known Malvertising IP" 
 }
@@ -26,12 +26,12 @@ phishing_mail_event = {
     "sender": "noreply@baddomain-example.com", # Daha jenerik bir sahte domain
     "subject": "Fatura Guncellemesi Gerekli",
     # Eski IP yerine, bilinen kötü amaçlı IP (Örn: PhishTank'ten alınmış)
-    "source_ip": "146.70.153.116", 
+    "source_ip": "39.107.242.130", 
     
     "email_body_text": (
         # Eski domain yerine, WHOIS/DNS sorgusunda sonuç verecek aktif ama test amaçlı domain
         "Lutfen faturanizi odemek icin https://google.com adresine tiklayin. " 
-        # Hash aynı kalabilir, WannaCry iyi bir test örneği
+        # Hash, WannaCry iyi bir test örneği
         "Ekli dosya SHA256: 24d004a104d4d54034dbcffc2a4b19a11f39008a575aa614ea04703480b1022c" 
     )
 }
