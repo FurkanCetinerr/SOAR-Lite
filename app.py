@@ -170,6 +170,25 @@ def format_timedelta(seconds):
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    
+    """
+    Ana Gösterge Paneli İstatistikleri (Web)
+    ---
+    tags:
+      - Web Arayüzü (HTML)
+    parameters:
+      - in: query
+        name: range
+        type: string
+        enum: ['24h', '7d', '30d', 'all']
+        description: Zaman filtresi (Örn: 7d, 30d)
+    responses:
+      200:
+        description: Dashboard sayfası yüklenir
+      302:
+        description: Giriş yapılmadıysa Login'e atar
+    """
+    
     # 1. ZAMAN FİLTRESİNİ AL VE HESAPLA
     current_range = request.args.get('range', '30d') 
     now_utc = datetime.now(timezone.utc)
@@ -344,6 +363,26 @@ def dashboard():
 @app.route('/incidents')
 @login_required
 def incidents_list():
+    
+    """
+    Tüm Olayların Filtreli Listesi (Web)
+    ---
+    tags:
+      - Web Arayüzü (HTML)
+    parameters:
+      - in: query
+        name: severity
+        type: string
+        description: Kritiklik seviyesine göre filtre (Low, Medium, High)
+      - in: query
+        name: status
+        type: string
+        description: Duruma göre filtre (New, In Progress, Closed)
+    responses:
+      200:
+        description: Olaylar tablosu yüklenir
+    """
+    
     severity_filter = request.args.get('severity', None)
     status_filter = request.args.get('status', None)
     query = Incident.query
@@ -371,6 +410,23 @@ def incident_detail(incident_id):
 @app.route('/incident/<int:incident_id>/escalate', methods=['POST'])
 @login_required
 def escalate_incident(incident_id):
+    
+    """
+    Olayı Eskale Et (Atama Havuzuna Gönder)
+    ---
+    tags:
+      - Olay Müdahalesi (Incident Actions)
+    parameters:
+      - in: path
+        name: incident_id
+        type: integer
+        required: true
+        description: Eskale edilecek Olayın ID'si
+    responses:
+      302:
+        description: Olay durumu 'Escalated' olarak güncellenir.
+    """
+    
     incident = Incident.query.get_or_404(incident_id)
     
     # Sadece olaya atalı kişi veya bir yönetici/admin eskale edebilsin (opsiyonel kural)
@@ -436,6 +492,23 @@ def update_status(incident_id):
 @app.route('/incident/<int:incident_id>/apply_firewall', methods=['POST'])
 @login_required
 def apply_firewall_rule(incident_id):
+    
+    """
+    Güvenlik Duvarı Kuralı Uygula
+    ---
+    tags:
+      - Olay Müdahalesi (Incident Actions)
+    parameters:
+      - in: path
+        name: incident_id
+        type: integer
+        required: true
+        description: Kural uygulanacak Olayın ID'si
+    responses:
+      302:
+        description: Başarılı. Kural uygulanır ve sayfaya yönlendirir.
+    """
+    
     incident = Incident.query.get_or_404(incident_id)
     
     if incident.suggested_firewall_rule:
@@ -696,6 +769,23 @@ def activity_log():
 @app.route('/incident/<int:incident_id>/export_pdf')
 @login_required
 def export_incident_pdf(incident_id):
+    
+    """
+    Olay Raporunu PDF Olarak İndir
+    ---
+    tags:
+      - Raporlama ve Çıktı
+    parameters:
+      - in: path
+        name: incident_id
+        type: integer
+        required: true
+        description: Raporu alınacak Olayın ID'si
+    responses:
+      200:
+        description: PDF dosyası oluşturulur ve indirme başlatılır.
+    """
+    
     # 1. Veriyi çek
     incident = Incident.query.get_or_404(incident_id)
     
