@@ -104,6 +104,28 @@ def from_json_filter(value):
 #login route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    
+    """
+    Kullanici Girisi (Web)
+    ---
+    tags:
+      - "Kullanici Yonetimi"
+    parameters:
+      - in: formData
+        name: username
+        type: string
+        description: "Kullanici adi"
+      - in: formData
+        name: password
+        type: string
+        description: "Sifre"
+    responses:
+      200:
+        description: "Login sayfasi yuklenir"
+      302:
+        description: "Basarili giriste Dashboarda yonlendirir"
+    """
+    
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
@@ -118,6 +140,32 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    
+    """
+    Yeni Kullanici Kaydi (Web)
+    ---
+    tags:
+      - "Kullanici Yonetimi"
+    parameters:
+      - in: formData
+        name: username
+        type: string
+        description: "Kullanici adi"
+      - in: formData
+        name: email
+        type: string
+        description: "E-posta adresi"
+      - in: formData
+        name: password
+        type: string
+        description: "Sifre"
+    responses:
+      200:
+        description: "Kayit sayfasi yuklenir"
+      302:
+        description: "Basarili kayitta Login sayfasina yonlendirir"
+    """
+    
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
@@ -187,18 +235,18 @@ def dashboard():
     Ana Gösterge Paneli İstatistikleri (Web)
     ---
     tags:
-      - Web Arayüzü (HTML)
+      - "Web Arayüzü (HTML)"
     parameters:
       - in: query
         name: range
         type: string
         enum: ['24h', '7d', '30d', 'all']
-        description: Zaman filtresi (Örn: 7d, 30d)
+        description: "Zaman filtresi (Orn 7d, 30d)"
     responses:
       200:
-        description: Dashboard sayfası yüklenir
+        description: "Dashboard sayfasi yuklenir"
       302:
-        description: Giriş yapılmadıysa Login'e atar
+        description: "Giris yapilmadiysa Login ekranina atar"
     """
     
     # 1. ZAMAN FİLTRESİNİ AL VE HESAPLA
@@ -380,19 +428,19 @@ def incidents_list():
     Tüm Olayların Filtreli Listesi (Web)
     ---
     tags:
-      - Web Arayüzü (HTML)
+      - "Web Arayüzü (HTML)"
     parameters:
       - in: query
         name: severity
         type: string
-        description: Kritiklik seviyesine göre filtre (Low, Medium, High)
+        description: "Kritiklik seviyesine gore filtre (Low, Medium, High)"
       - in: query
         name: status
         type: string
-        description: Duruma göre filtre (New, In Progress, Closed)
+        description: "Duruma gore filtre (New, In Progress, Closed)"
     responses:
       200:
-        description: Olaylar tablosu yüklenir
+        description: "Olaylar tablosu yuklenir"
     """
     
     severity_filter = request.args.get('severity', None)
@@ -693,6 +741,19 @@ def health_check():
 @login_required
 @role_required('Admin')
 def user_management():
+    
+    """
+    Tum Kullanicilari Listele (Sadece Admin)
+    ---
+    tags:
+      - "Admin Islemleri"
+    responses:
+      200:
+        description: "Kullanici yonetim sayfasi yuklenir"
+      403:
+        description: "Yetkisiz erisim (Admin degil)"
+    """
+    
     # Tüm kullanıcıları ID'ye göre sıralayarak çek
     users = User.query.order_by(User.id).all()
     return render_template('admin_panel.html', users=users)
@@ -702,6 +763,31 @@ def user_management():
 @login_required
 @role_required('Admin')
 def change_user_role(user_id):
+    
+    """
+    Kullanici Rolunu Degistir (Sadece Admin)
+    ---
+    tags:
+      - "Admin Islemleri"
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+        description: "Rolu degisecek kullanicinin ID numarasi"
+      - in: formData
+        name: role
+        type: string
+        required: true
+        enum: ['Analyst', 'Senior_Analyst', 'Manager', 'Admin']
+        description: "Atanacak yeni rol"
+    responses:
+      302:
+        description: "Rol guncellenir ve sayfaya yonlendirilir"
+      403:
+        description: "Yetkisiz erisim"
+    """
+    
     # Rolü değiştirilecek kullanıcıyı veritabanından bul
     user_to_update = User.query.get_or_404(user_id)
     
