@@ -12,3 +12,4 @@ python-dotenv
 shodan
 vt-py
 pytz
+flasgger

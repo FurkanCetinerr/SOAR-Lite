@@ -14,6 +14,7 @@ from sqlalchemy import func, cast, Interval, or_
 from io import BytesIO
 from xhtml2pdf import pisa
 from flask import send_file
+from flasgger import Swagger
 
 # Geçici olayları ve zaman damgalarını saklamak için basit bir önbellek
 EVENT_CACHE = []
@@ -40,6 +41,13 @@ def create_app():
 
     db.init_app(app)
 
+    # YENİ EKLENEN KISIM: Swagger Ayarları
+    app.config['SWAGGER'] = {
+        'title': 'SOAR-Lite API Dokümantasyonu',
+        'uiversion': 3
+    }
+    Swagger(app)
+    
     # --- Flask-Login Yapılandırması ---
     login_manager = LoginManager()
     login_manager.init_app(app)
@@ -529,6 +537,33 @@ def assign_incident(incident_id):
 # --- API ve PUBLIC ROTALAR ---
 @app.route('/api/v1/event', methods=['POST'])
 def handle_event():
+    
+    """
+    SOAR Sistemine Yeni Bir Olay (Event) Gönderir
+    ---
+    tags:
+      - Incident API
+    parameters:
+      - in: body
+        name: event
+        description: Olayın JSON formatındaki detayları
+        required: true
+        schema:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "phishing"
+            src_ip:
+              type: string
+              example: "192.168.1.50"
+    responses:
+      200:
+        description: Başarılı. Olay korelasyon motoruna iletildi.
+      400:
+        description: Hatalı veya boş JSON formatı.
+    """
+    
     event_data = request.get_json()
     if not event_data:
         return jsonify({"status": "error", "message": "Invalid JSON"}), 400
@@ -555,6 +590,17 @@ def handle_event():
 
 @app.route('/api/v1/health', methods=['GET'])
 def health_check():
+    
+    """
+    Sistemin Ayakta Olup Olmadığını Kontrol Eder
+    ---
+    tags:
+      - System API
+    responses:
+      200:
+        description: Sistem aktif ve çalışıyor.
+    """
+    
     return jsonify({"status": "ok", "system": "SOAR-lite"})
 
 #Admin kullacı paneli 

@@ -5,7 +5,7 @@ import json
 import sys
 
 # Sunucumuzun adresi
-SOAR_API_URL = "http://127.0.0.1:5000/api/v1/event"
+SOAR_API_URL = "https://soar-lite-app.onrender.com/api/v1/event"
 
 # Senaryo 1: Malicious IP Tespiti Olayı
 malicious_ip_event = {
