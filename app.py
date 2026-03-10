@@ -41,12 +41,24 @@ def create_app():
 
     db.init_app(app)
 
-    # YENİ EKLENEN KISIM: Swagger Ayarları
+    # YENİ EKLENEN KISIM: Swagger Ayarları ve HTTPS Desteği
+    swagger_template = {
+        "swagger": "2.0",
+        "info": {
+            "title": "SOAR-Lite API Dokümantasyonu",
+            "version": "1.0.0"
+        },
+        "schemes": [
+            "https", 
+            "http"
+        ]
+    }
+
     app.config['SWAGGER'] = {
-        'title': 'SOAR-Lite API Dokümantasyonu',
+        'title': 'SOAR-Lite API',
         'uiversion': 3
     }
-    Swagger(app)
+    Swagger(app, template=swagger_template)
     
     # --- Flask-Login Yapılandırması ---
     login_manager = LoginManager()
